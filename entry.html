@@ -655,12 +655,14 @@ async function pushToSheet(entry) {
     Object.entries(data).forEach(([k,v]) => params.append(k, v||''));
     await fetch(URL + '?' + params.toString(), { mode:'no-cors' });
 
-    // Upload payment screenshots via chunked GET
+    // Upload payment screenshots via chunked GET — compress aggressively first
     const screenTypes = ['UPI','NEFT','Cash','Cheque','PP'];
     const screenKeys  = ['photoUPI','photoNEFT','photoCash','photoCheque','photoCard'];
     for (let i = 0; i < screenTypes.length; i++) {
-      const photoData = entry[screenKeys[i]];
+      let photoData = entry[screenKeys[i]];
       if (photoData && photoData.length > 100) {
+        // Compress to 400px at 50% quality — makes file ~5-10KB instead of 100KB+
+        photoData = await G3.compress(photoData, 400, 0.5);
         const b64 = photoData.replace(/^data:[^;]+;base64,/, '');
         await uploadInChunks(URL, {
           linkedRef:  entry.ref,
@@ -673,9 +675,13 @@ async function pushToSheet(entry) {
       }
     }
 
-    // Upload attached documents via chunked GET
+    // Upload attached documents via chunked GET — compress images only
     for (const file of (entry._files || [])) {
-      const b64 = file.data.replace(/^data:[^;]+;base64,/, '');
+      let fileData = file.data;
+      if (file.mime && file.mime.startsWith('image/')) {
+        fileData = await G3.compress(fileData, 600, 0.6);
+      }
+      const b64 = fileData.replace(/^data:[^;]+;base64,/, '');
       await uploadInChunks(URL, {
         linkedRef:  entry.ref,
         linkedTo:   'entry',
@@ -690,9 +696,26 @@ async function pushToSheet(entry) {
 
 // ── CHUNKED UPLOAD via GET ────────────────────────────────────
 async function uploadInChunks(URL, meta, b64data) {
-  const CHUNK = 1500; // safe URL param size
+  const CHUNK = 8000; // increased chunk size — fewer requests
   const total = Math.ceil(b64data.length / CHUNK);
   const uploadId = meta.linkedRef + '-' + Date.now();
+
+  for (let i = 0; i < total; i++) {
+    const chunk = b64data.slice(i * CHUNK, (i + 1) * CHUNK);
+    const p = new URLSearchParams({
+      action:      'uploadChunk',
+      uploadId:    uploadId,
+      chunkIdx:    i,
+      totalChunks: total,
+      chunk:       chunk,
+    });
+    if (i === 0) {
+      Object.entries(meta).forEach(([k,v]) => p.append(k, v||''));
+    }
+    await fetch(URL + '?' + p.toString(), { mode:'no-cors' });
+    await new Promise(r => setTimeout(r, 50)); // reduced delay
+  }
+}
 
   for (let i = 0; i < total; i++) {
     const chunk = b64data.slice(i * CHUNK, (i + 1) * CHUNK);
