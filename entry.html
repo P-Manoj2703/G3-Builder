@@ -647,15 +647,15 @@ async function pushToSheet(entry) {
   const URL = G3_CONFIG.app.sheetURL;
   if (URL === 'YOUR_APPS_SCRIPT_URL_HERE') return;
   try {
-    const fd = new FormData();
-    fd.append('action', entry.editedAt ? 'addEntry' : 'addEntry');
-    // Strip large photos from main row
+    // Strip large photos from main row — send via GET
     const data = {...entry};
     ['photoUPI','photoNEFT','photoCash','photoCard','photoCheque','_files'].forEach(k => delete data[k]);
-    Object.entries(data).forEach(([k,v]) => fd.append(k, v||''));
-    await fetch(URL, { method:'POST', body:fd });
+    data.action = 'addEntry';
+    const params = new URLSearchParams();
+    Object.entries(data).forEach(([k,v]) => params.append(k, v||''));
+    await fetch(URL + '?' + params.toString(), { mode:'no-cors' });
 
-    // Upload files separately
+    // Upload photo files separately via POST to Drive
     for (const file of (entry._files || [])) {
       const ffd = new FormData();
       ffd.append('action', 'addDoc');
@@ -665,7 +665,7 @@ async function pushToSheet(entry) {
       ffd.append('fileMime', file.mime);
       ffd.append('fileData', file.data);
       ffd.append('uploadedBy', entry.submittedBy);
-      await fetch(URL, { method:'POST', body:ffd });
+      fetch(URL, { method:'POST', body:ffd, mode:'no-cors' }).catch(()=>{});
     }
   } catch(e) {} // silent fail, data is saved locally
 }
@@ -862,8 +862,7 @@ function confirmDel() {
   deleteLocalEntry(pendingDel);
   const URL=G3_CONFIG.app.sheetURL;
   if(URL!=='YOUR_APPS_SCRIPT_URL_HERE'){
-    const fd=new FormData(); fd.append('action','delete'); fd.append('ref',pendingDel); fd.append('sheet','entries');
-    fetch(URL,{method:'POST',body:fd}).catch(()=>{});
+    fetch(URL+'?action=delete&ref='+pendingDel+'&sheet=entries',{mode:'no-cors'}).catch(()=>{});
   }
   qs('delModal').classList.remove('show');
   pendingDel=null;
