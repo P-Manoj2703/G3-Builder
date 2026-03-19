@@ -250,10 +250,16 @@ async function addSalePayment(){
   renderAll();
   const URL=G3_CONFIG.app.sheetURL;
   if(URL!=='YOUR_APPS_SCRIPT_URL_HERE'){
-    const fd=new FormData();fd.append('action','addSale');
-    Object.entries(entry).forEach(([k,v])=>fd.append(k,v||''));
-    if(sDoc){fd.append('fileData',sDoc.data);fd.append('fileName',sDoc.name);fd.append('fileMime',sDoc.mime);}
-    fetch(URL,{method:'POST',body:fd}).catch(()=>{});
+    const params=new URLSearchParams({action:'addSale'});
+    Object.entries(entry).forEach(([k,v])=>params.append(k,v||''));
+    fetch(URL+'?'+params.toString(),{mode:'no-cors'}).catch(()=>{});
+    if(sDoc){
+      const ffd=new FormData();
+      ffd.append('action','addDoc');ffd.append('linkedTo','sale');
+      ffd.append('linkedRef',entry.ref);ffd.append('fileData',sDoc.data);
+      ffd.append('fileName',sDoc.name);ffd.append('fileMime',sDoc.mime);
+      fetch(URL,{method:'POST',body:ffd,mode:'no-cors'}).catch(()=>{});
+    }
   }
   ['sAmt','sTxn','sNotes'].forEach(id=>qs(id).value='');
   sDoc=null;qs('sDocImg').classList.remove('show');qs('sDocPrompt').innerHTML='<div class="pz-ic">📎</div><div class="pz-tt">Attach receipt / sale agreement</div><div class="pz-ht">Photo or PDF</div>';qs('sDocZone').classList.remove('has');
