@@ -655,39 +655,62 @@ async function pushToSheet(entry) {
     Object.entries(data).forEach(([k,v]) => params.append(k, v||''));
     await fetch(URL + '?' + params.toString(), { mode:'no-cors' });
 
-    // Upload payment screenshots to Drive
+    // Upload payment screenshots via chunked GET
     const screenTypes = ['UPI','NEFT','Cash','Cheque','PP'];
     const screenKeys  = ['photoUPI','photoNEFT','photoCash','photoCheque','photoCard'];
     for (let i = 0; i < screenTypes.length; i++) {
       const photoData = entry[screenKeys[i]];
       if (photoData && photoData.length > 100) {
-        const ffd = new FormData();
-        ffd.append('action',     'addDoc');
-        ffd.append('linkedTo',   'entry');
-        ffd.append('linkedRef',  entry.ref);
-        ffd.append('docType',    screenTypes[i] + ' screenshot');
-        ffd.append('fileName',   entry.ref + '-' + screenTypes[i] + '.jpg');
-        ffd.append('fileMime',   'image/jpeg');
-        ffd.append('fileData',   photoData.replace(/^data:[^;]+;base64,/, ''));
-        ffd.append('uploadedBy', entry.submittedBy || '');
-        fetch(URL, { method:'POST', body:ffd, mode:'no-cors' }).catch(()=>{});
+        const b64 = photoData.replace(/^data:[^;]+;base64,/, '');
+        await uploadInChunks(URL, {
+          linkedRef:  entry.ref,
+          linkedTo:   'entry',
+          docType:    screenTypes[i] + ' screenshot',
+          fileName:   entry.ref + '-' + screenTypes[i] + '.jpg',
+          fileMime:   'image/jpeg',
+          uploadedBy: entry.submittedBy || ''
+        }, b64);
       }
     }
 
-    // Upload attached documents to Drive
+    // Upload attached documents via chunked GET
     for (const file of (entry._files || [])) {
-      const ffd = new FormData();
-      ffd.append('action',    'addDoc');
-      ffd.append('linkedTo',  'entry');
-      ffd.append('linkedRef', entry.ref);
-      ffd.append('docType',   'attachment');
-      ffd.append('fileName',  file.name);
-      ffd.append('fileMime',  file.mime);
-      ffd.append('fileData',  file.data);
-      ffd.append('uploadedBy', entry.submittedBy || '');
-      fetch(URL, { method:'POST', body:ffd, mode:'no-cors' }).catch(()=>{});
+      const b64 = file.data.replace(/^data:[^;]+;base64,/, '');
+      await uploadInChunks(URL, {
+        linkedRef:  entry.ref,
+        linkedTo:   'entry',
+        docType:    'attachment',
+        fileName:   file.name,
+        fileMime:   file.mime,
+        uploadedBy: entry.submittedBy || ''
+      }, b64);
     }
   } catch(e) {} // silent fail, data is saved locally
+}
+
+// ── CHUNKED UPLOAD via GET ────────────────────────────────────
+async function uploadInChunks(URL, meta, b64data) {
+  const CHUNK = 1500; // safe URL param size
+  const total = Math.ceil(b64data.length / CHUNK);
+  const uploadId = meta.linkedRef + '-' + Date.now();
+
+  for (let i = 0; i < total; i++) {
+    const chunk = b64data.slice(i * CHUNK, (i + 1) * CHUNK);
+    const p = new URLSearchParams({
+      action:    'uploadChunk',
+      uploadId:  uploadId,
+      chunkIdx:  i,
+      totalChunks: total,
+      chunk:     chunk,
+    });
+    // Add meta only on first chunk
+    if (i === 0) {
+      Object.entries(meta).forEach(([k,v]) => p.append(k, v||''));
+    }
+    await fetch(URL + '?' + p.toString(), { mode:'no-cors' });
+    // Small delay to avoid overwhelming the script
+    await new Promise(r => setTimeout(r, 100));
+  }
 }
 
 // ── RESET ─────────────────────────────────────────────────────
