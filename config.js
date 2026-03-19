@@ -11,12 +11,12 @@ const G3_CONFIG = {
     name:         'G3 Builders',
     company:      'MicroRealty India Pvt Ltd',
     projectName:  'Project 2 — Vizag',
-    ownerPhone:   '919XXXXXXXXX',
+    ownerPhone:   '919676872349',
     siteGPS:      { lat: 17.6868, lng: 83.2185 },
     siteRadiusKm: 2,
     photoMaxAgeDays: 1,
     ownerPin:     '9999',
-    sheetURL:     'YOUR_APPS_SCRIPT_URL_HERE',
+    sheetURL:     'https://script.google.com/macros/s/AKfycbwxLoKSp2WcEHsynx37PjzP2WpIlhFMd7zmxSBDaVyqF6b5OzHRNFHBu5h5eb0bpheu/exec',
   },
 
   people: [
