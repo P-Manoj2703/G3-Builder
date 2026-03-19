@@ -51,7 +51,7 @@
   <div class="grp">
     <div class="row">
       <span class="rl">Name</span>
-      <input type="text" id="vendor" placeholder="e.g. Simhadri Steel, Ramu sand…" list="vendorList" autocomplete="off">
+      <input type="text" id="vendor" placeholder="e.g. Simhadri Steel, Ramu sand…" list="vendorList" autocomplete="off" style="text-align:left">
       <datalist id="vendorList"></datalist>
     </div>
     <div class="row" style="align-items:flex-start;padding-top:12px">
@@ -114,7 +114,7 @@
     <div class="lbl">Amount ₹</div>
     <div class="grp"><div class="row amt-row">
       <span class="amt-lbl">Rupees</span>
-      <input class="amt-inp" type="number" id="amount" inputmode="numeric" placeholder="0" min="1">
+      <input class="amt-inp" type="number" id="amount" inputmode="numeric" placeholder="0" onfocus="this.select()">
     </div></div>
     <!-- Vendor rate warning -->
     <div class="warn-box" id="rateWarn" style="display:none"></div>
@@ -278,7 +278,7 @@
 // ── STATE ─────────────────────────────────────────────────────
 const S = {
   who:'', cat:'', catObj:null, pay:'', payClass:'',
-  photos:{}, files:[], workers:0, gps:null, editRef:null,
+  photos:{}, files:[], workers:0, gps:null, editRef:null, screen:0,
 };
 let epFilter='All', pendingDel=null;
 
@@ -372,6 +372,7 @@ function pickWho(el, id) {
   S.who = id;
   const person = G3.person(id);
   buildCatGrid(person?.role || 'supervisor');
+  setTimeout(() => goTo(1), 150);
 }
 
 function pickCat(el, id) {
@@ -489,7 +490,8 @@ function removeFile(i) {
 
 // ── NAVIGATION ────────────────────────────────────────────────
 function goTo(n) {
-  if (n > 0 && !validate(n-1)) return;
+  if (n > S.screen && !validate(S.screen)) return;
+  S.screen = n;
   for (let i = 0; i < 5; i++) {
     const t = qs('t'+i);
     t.classList.remove('active','done');
@@ -670,7 +672,7 @@ async function pushToSheet(entry) {
 
 // ── RESET ─────────────────────────────────────────────────────
 function resetForm() {
-  Object.assign(S, {who:'',cat:'',catObj:null,pay:'',payClass:'',photos:{},files:[],workers:0,editRef:null});
+  Object.assign(S, {who:'',cat:'',catObj:null,pay:'',payClass:'',photos:{},files:[],workers:0,editRef:null,screen:0});
   qsa('.who-chip,.cat-chip').forEach(c=>c.classList.remove('sel'));
   qsa('.pay-chip').forEach(c=>c.className='pay-chip');
   ['vendor','notes','amount','txnId','utrId','chequeNo','chequeBank','salPerson'].forEach(id=>{const el=qs(id);if(el)el.value='';});
