@@ -139,9 +139,9 @@
   <div id="pUPI" style="display:none">
     <div class="lbl">UPI screenshot</div>
     <div class="pzone" id="zUPI" onclick="document.getElementById('fUPI').click()">
-      <input type="file" id="fUPI" accept="image/*" style="display:none" onchange="handlePic(this,'UPI')">
+      <input type="file" id="fUPI" accept="image/*" multiple style="display:none" onchange="handlePic(this,'UPI')">
       <img class="pzone-img" id="iUPI">
-      <div id="dUPI"><div class="pz-ic">📱</div><div class="pz-tt">Tap to attach screenshot</div><div class="pz-ht">Open PhonePe/GPay → screenshot success → attach here</div></div>
+      <div id="dUPI"><div class="pz-ic">📱</div><div class="pz-tt">Tap to attach screenshots</div><div class="pz-ht">Select up to 5 screenshots</div></div>
     </div>
     <div class="photo-warn" id="warnUPI"></div>
     <div class="grp" style="margin-top:12px"><div class="row">
@@ -158,9 +158,9 @@
     <div class="info-box">📋 Find UTR in your bank app under transaction details.</div>
     <div class="lbl" style="margin-top:16px">Screenshot (optional)</div>
     <div class="pzone" id="zNEFT" onclick="document.getElementById('fNEFT').click()">
-      <input type="file" id="fNEFT" accept="image/*" style="display:none" onchange="handlePic(this,'NEFT')">
+      <input type="file" id="fNEFT" accept="image/*" multiple style="display:none" onchange="handlePic(this,'NEFT')">
       <img class="pzone-img" id="iNEFT">
-      <div id="dNEFT"><div class="pz-ic">📄</div><div class="pz-tt">Attach bank screenshot</div><div class="pz-ht">Optional</div></div>
+      <div id="dNEFT"><div class="pz-ic">📄</div><div class="pz-tt">Attach bank screenshots</div><div class="pz-ht">Up to 5 screenshots</div></div>
     </div>
     <div class="photo-warn" id="warnNEFT"></div>
   </div>
@@ -174,9 +174,9 @@
     </div>
     <div class="lbl" style="margin-top:16px">Cheque photo</div>
     <div class="pzone" id="zCheque" onclick="document.getElementById('fCheque').click()">
-      <input type="file" id="fCheque" accept="image/*" capture="environment" style="display:none" onchange="handlePic(this,'Cheque')">
+      <input type="file" id="fCheque" accept="image/*" multiple style="display:none" onchange="handlePic(this,'Cheque')">
       <img class="pzone-img" id="iCheque">
-      <div id="dCheque"><div class="pz-ic">📝</div><div class="pz-tt">Photo the cheque</div><div class="pz-ht">Recommended before handing over</div></div>
+      <div id="dCheque"><div class="pz-ic">📝</div><div class="pz-tt">Photo the cheque</div><div class="pz-ht">Up to 5 photos</div></div>
     </div>
     <div class="photo-warn" id="warnCheque"></div>
   </div>
@@ -192,9 +192,9 @@
     </div>
     <div class="lbl" style="margin-top:16px">Bill / receipt photo (if available)</div>
     <div class="pzone" id="zCash" onclick="document.getElementById('fCash').click()">
-      <input type="file" id="fCash" accept="image/*" capture="environment" style="display:none" onchange="handlePic(this,'Cash')">
+      <input type="file" id="fCash" accept="image/*" multiple style="display:none" onchange="handlePic(this,'Cash')">
       <img class="pzone-img" id="iCash">
-      <div id="dCash"><div class="pz-ic">🧾</div><div class="pz-tt">Add bill photo</div><div class="pz-ht">Optional — photograph if receipt exists</div></div>
+      <div id="dCash"><div class="pz-ic">🧾</div><div class="pz-tt">Add bill photos</div><div class="pz-ht">Up to 5 photos</div></div>
     </div>
     <div class="photo-warn" id="warnCash"></div>
   </div>
@@ -208,7 +208,7 @@
     </div>
     <div class="lbl" style="margin-top:16px">Bill photo (recommended)</div>
     <div class="pzone" id="zPP" onclick="document.getElementById('fPP').click()">
-      <input type="file" id="fPP" accept="image/*" capture="environment" style="display:none" onchange="handlePic(this,'PP')">
+      <input type="file" id="fPP" accept="image/*" multiple style="display:none" onchange="handlePic(this,'PP')">
       <img class="pzone-img" id="iPP">
       <div id="dPP"><div class="pz-ic">🧾</div><div class="pz-tt">Photograph the bill</div><div class="pz-ht">Tap to open camera</div></div>
     </div>
@@ -420,11 +420,21 @@ function calcL() {
 
 // ── PHOTO HANDLING + EXIF ─────────────────────────────────────
 async function handlePic(input, type) {
-  const file = input.files[0];
-  if (!file) return;
+  if (!Array.isArray(S.photos[type])) S.photos[type] = [];
+  const remaining = 5 - S.photos[type].length;
+  if (remaining <= 0) {
+    alert('Maximum 5 screenshots allowed.');
+    input.value = '';
+    return;
+  }
+  const files = Array.from(input.files).slice(0, remaining);
+  if (!files.length) return;
+  if (Array.from(input.files).length > remaining) {
+    alert(`Only ${remaining} more screenshot(s) allowed. First ${remaining} selected.`);
+  }
 
-  // EXIF check
-  const exifDate = await G3.exifDate(file);
+  // EXIF check on first file only
+  const exifDate = await G3.exifDate(files[0]);
   const warnEl = qs('warn' + type);
   if (exifDate) {
     const ageHrs = (Date.now() - exifDate.getTime()) / 3600000;
@@ -437,24 +447,50 @@ async function handlePic(input, type) {
     }
   }
 
-  // Compress and store
-  const reader = new FileReader();
-  reader.onload = async e => {
-    const compressed = await G3.compress(e.target.result);
-    S.photos[type] = compressed;
-    const img = qs('i' + type);
-    const prompt = qs('d' + type);
-    const zone  = qs('z' + type);
-    if (img)    { img.src = compressed; img.classList.add('show'); }
-    if (prompt) { prompt.style.display = 'none'; }
-    if (zone)   { zone.classList.add('has'); }
-  };
-  reader.readAsDataURL(file);
+  // Compress and store all files as array
+  if (!Array.isArray(S.photos[type])) S.photos[type] = [];
+  for (const file of files) {
+    const reader = new FileReader();
+    await new Promise(res => {
+      reader.onload = async e => {
+        const compressed = await G3.compress(e.target.result, 400, 0.5);
+        S.photos[type].push(compressed);
+        res();
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+
+  // Show preview of first photo + count badge
+  const img    = qs('i' + type);
+  const prompt = qs('d' + type);
+  const zone   = qs('z' + type);
+  const count  = S.photos[type].length;
+  if (img)    { img.src = S.photos[type][0]; img.classList.add('show'); }
+  if (prompt) { prompt.style.display = 'none'; }
+  if (zone)   {
+    zone.classList.add('has');
+    // Show count badge if more than 1
+    let badge = zone.querySelector('.photo-count');
+    if (!badge) { badge = document.createElement('div'); badge.className = 'photo-count'; zone.appendChild(badge); }
+    badge.textContent = count > 1 ? count + ' photos' : '';
+    badge.style.cssText = 'position:absolute;bottom:8px;right:8px;background:rgba(0,0,0,0.6);color:#fff;font-size:11px;padding:2px 8px;border-radius:10px;';
+  }
 }
 
 // ── FILE ATTACHMENTS ──────────────────────────────────────────
 async function handleFiles(input) {
-  for (const file of input.files) {
+  const remaining = 5 - S.files.length;
+  if (remaining <= 0) {
+    alert('Maximum 5 documents allowed.');
+    input.value = '';
+    return;
+  }
+  const filesToAdd = Array.from(input.files).slice(0, remaining);
+  if (Array.from(input.files).length > remaining) {
+    alert(`Only ${remaining} more document(s) allowed. First ${remaining} selected.`);
+  }
+  for (const file of filesToAdd) {
     const reader = new FileReader();
     await new Promise(res => {
       reader.onload = async e => {
@@ -655,20 +691,23 @@ async function pushToSheet(entry) {
     Object.entries(data).forEach(([k,v]) => params.append(k, v||''));
     await fetch(URL + '?' + params.toString(), { mode:'no-cors' });
 
-    // Step 2 — Upload screenshots (compressed small) via POST
+    // Step 2 — Upload screenshots (max 5 per type, stored as array)
     const screenTypes = ['UPI','NEFT','Cash','Cheque','PP'];
     const screenKeys  = ['photoUPI','photoNEFT','photoCash','photoCheque','photoCard'];
     for (let i = 0; i < screenTypes.length; i++) {
-      let photoData = entry[screenKeys[i]];
-      if (photoData && photoData.length > 100) {
-        photoData = await G3.compress(photoData, 400, 0.5);
+      const photos = entry[screenKeys[i]];
+      if (!photos) continue;
+      // Handle both single string and array
+      const photoArr = Array.isArray(photos) ? photos.slice(0,5) : [photos];
+      for (const photoData of photoArr) {
+        if (!photoData || photoData.length < 100) continue;
         const ffd = new FormData();
         ffd.append('action',    'addDoc');
         ffd.append('linkedTo',  'entry');
         ffd.append('linkedRef', entry.ref);
         ffd.append('fileType',  'screenshot');
         ffd.append('docType',   screenTypes[i] + ' screenshot');
-        ffd.append('fileName',  entry.ref + '-' + screenTypes[i] + '.jpg');
+        ffd.append('fileName',  entry.ref + '-' + screenTypes[i] + '-' + Date.now() + '.jpg');
         ffd.append('fileMime',  'image/jpeg');
         ffd.append('fileData',  photoData.replace(/^data:[^;]+;base64,/,''));
         ffd.append('uploadedBy', entry.submittedBy || '');
@@ -676,8 +715,9 @@ async function pushToSheet(entry) {
       }
     }
 
-    // Step 3 — Upload documents via POST
-    for (const file of (entry._files || [])) {
+    // Step 3 — Upload documents (max 5)
+    const files = (entry._files || []).slice(0, 5);
+    for (const file of files) {
       let fileData = file.data;
       if (file.mime && file.mime.startsWith('image/')) {
         fileData = await G3.compress(fileData, 600, 0.6);
