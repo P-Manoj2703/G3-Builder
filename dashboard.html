@@ -1,0 +1,365 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>G3 — Dashboard</title>
+<link rel="stylesheet" href="style.css">
+<style>
+.main{padding:16px;max-width:900px;margin:0 auto;}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:16px;}
+@media(max-width:600px){.grid2{grid-template-columns:1fr;}}
+.chart-wrap{position:relative;width:100%;height:220px;}
+.xirr-big{text-align:center;padding:16px 0;}
+.xirr-num{font-size:52px;font-weight:700;letter-spacing:-2px;color:var(--gd);line-height:1;}
+.xirr-lbl{font-size:12px;color:var(--ink3);letter-spacing:1px;text-transform:uppercase;margin-top:4px;}
+.xirr-track{background:var(--bg);border-radius:8px;height:8px;overflow:hidden;margin:12px 0 4px;}
+.xirr-fill{height:8px;border-radius:8px;background:var(--gd);transition:width 1s;}
+.xirr-ticks{display:flex;justify-content:space-between;font-size:10px;color:var(--ink3);}
+.ms-item{display:flex;gap:12px;padding:10px 0;border-bottom:1px solid var(--border);align-items:flex-start;}
+.ms-item:last-child{border-bottom:none;}
+.ms-dot{width:22px;height:22px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;flex-shrink:0;margin-top:2px;}
+.ms-dot.done{background:var(--gd);color:#fff;}
+.ms-dot.active{background:#fff8e6;color:var(--yellow);border:2px solid var(--yellow);animation:glow 2s infinite;}
+@keyframes glow{0%,100%{box-shadow:0 0 0 0 rgba(255,149,0,0)}50%{box-shadow:0 0 0 5px rgba(255,149,0,.2)}}
+.ms-dot.pending{background:var(--bg);color:var(--ink3);border:1px solid var(--border);}
+.ms-body{flex:1;}
+.ms-name{font-size:14px;color:var(--ink);}
+.ms-budget{font-size:12px;color:var(--ink3);margin-top:2px;}
+</style>
+</head>
+<body>
+<nav class="nav">
+  <a class="nav-brand" href="index.html">G3 <span>Builders</span></a>
+  <div class="nav-links">
+    <a class="nav-link" href="entry.html">+ Entry</a>
+    <a class="nav-link" href="vendors.html">Vendors</a>
+    <a class="nav-link" href="sales.html">Sales</a>
+    <a class="nav-link active" href="dashboard.html">Dashboard</a>
+  </div>
+  <div class="nav-right">
+    <span style="font-size:11px;color:#555" id="syncTime">—</span>
+  </div>
+</nav>
+
+<div class="main">
+
+  <div class="kpi-grid" id="kpiStrip"></div>
+
+  <div class="grid2">
+    <!-- Spend by category -->
+    <div class="panel">
+      <div class="panel-hdr"><span class="panel-title">Spend by category</span></div>
+      <div class="panel-body" style="padding:12px 16px">
+        <div id="catBars"></div>
+      </div>
+    </div>
+
+    <!-- Monthly chart -->
+    <div class="panel">
+      <div class="panel-hdr"><span class="panel-title">Monthly spend</span></div>
+      <div class="panel-body"><div class="chart-wrap"><canvas id="monthlyChart"></canvas></div></div>
+    </div>
+  </div>
+
+  <div class="grid2">
+    <!-- XIRR -->
+    <div class="panel">
+      <div class="panel-hdr"><span class="panel-title">XIRR — investor return</span></div>
+      <div class="panel-body">
+        <div class="xirr-big">
+          <div class="xirr-num" id="xirrNum">—</div>
+          <div class="xirr-lbl">annualised return (XIRR)</div>
+        </div>
+        <div class="xirr-track"><div class="xirr-fill" id="xirrFill" style="width:0%"></div></div>
+        <div class="xirr-ticks"><span>0%</span><span>8% ↑</span><span>10% ↑</span><span>15%</span></div>
+        <div style="margin-top:14px;background:var(--bg);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--ink2);line-height:1.8" id="xirrCalc">Loading…</div>
+      </div>
+    </div>
+
+    <!-- Milestones -->
+    <div class="panel">
+      <div class="panel-hdr"><span class="panel-title">Milestones</span></div>
+      <div style="padding:0 16px" id="milestoneList"></div>
+    </div>
+  </div>
+
+  <!-- Vendor outstanding -->
+  <div class="panel">
+    <div class="panel-hdr"><span class="panel-title">Vendor balances outstanding</span></div>
+    <div class="tbl-wrap">
+      <table class="tbl"><thead><tr><th>Vendor</th><th>Category</th><th style="text-align:right">Invoiced</th><th style="text-align:right">Paid</th><th style="text-align:right">Balance</th></tr></thead>
+      <tbody id="vendorBalBody"></tbody></table>
+    </div>
+  </div>
+
+  <!-- Sales summary -->
+  <div class="panel">
+    <div class="panel-hdr"><span class="panel-title">Sales — amount to collect</span><a class="panel-link" href="sales.html">Full details →</a></div>
+    <div class="tbl-wrap">
+      <table class="tbl"><thead><tr><th>Flat</th><th>Buyer</th><th style="text-align:right">Sale value</th><th style="text-align:right">Received</th><th style="text-align:right">Balance</th><th>Status</th></tr></thead>
+      <tbody id="salesBody"></tbody></table>
+    </div>
+  </div>
+
+  <!-- Recent entries -->
+  <div class="panel">
+    <div class="panel-hdr"><span class="panel-title">Recent entries</span><a class="panel-link" href="entry.html">+ Add →</a></div>
+    <div style="padding:0 16px" id="recentEntries"></div>
+  </div>
+
+</div>
+
+<!-- Photo viewer -->
+<div class="modal-bg" id="photoModal" onclick="if(event.target===this)this.classList.remove('show')">
+  <div class="modal-inner">
+    <div class="modal-ph"><img id="modalImg" src="" style="max-width:100%;max-height:70vh"><div id="modalNoPhoto" style="display:none;color:#555;padding:32px;font-size:14px">No photo</div></div>
+    <div class="modal-info"><div id="modalMeta" style="font-size:13px;color:var(--ink2);line-height:1.8;margin-bottom:12px"></div><button class="modal-close-btn" onclick="document.getElementById('photoModal').classList.remove('show')">Close</button></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<script src="config.js"></script>
+<script>
+let allEntries=[], allVendors=[], allSales=[], chart=null;
+
+document.addEventListener('DOMContentLoaded',()=>{
+  loadAll();
+  setInterval(loadAll, 120000);
+});
+
+async function loadAll(){
+  document.getElementById('syncTime').textContent='Syncing…';
+  const URL=G3_CONFIG.app.sheetURL;
+  if(URL==='YOUR_APPS_SCRIPT_URL_HERE'){
+    allEntries=getLocalEntries();
+    allVendors=getSampleVendors();
+    allSales=getSampleSales();
+  } else {
+    try{
+      const r=await fetch(URL+'?action=getAll');
+      const d=await r.json();
+      if(d.ok){
+        allEntries=d.data.entries||[];
+        allVendors=d.data.vendors||[];
+        allSales=d.data.sales||[];
+        // Merge local photos
+        const local=getLocalEntries();
+        allEntries.forEach(e=>{const l=local.find(x=>x.ref===e.ref);if(l){e.photoUPI=l.photoUPI;e.photoCash=l.photoCash;e.photoNEFT=l.photoNEFT;e.photoCheque=l.photoCheque;e.photoCard=l.photoCard;}});
+      }
+    }catch{allEntries=getLocalEntries();}
+  }
+  document.getElementById('syncTime').textContent='Updated '+new Date().toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+  renderAll();
+}
+
+function getLocalEntries(){try{return JSON.parse(localStorage.getItem('g3_local')||'[]');}catch{return[];}}
+
+function getSampleVendors(){return[
+  {vendorName:'Simhadri Steel',category:'steel',invoiceAmt:5628931,paidAmt:5570000,balanceAmt:58931},
+  {vendorName:'Aparna Enterprises',category:'rmc',invoiceAmt:3970200,paidAmt:3430000,balanceAmt:540200},
+  {vendorName:'Jagadish Materials',category:'cement',invoiceAmt:1090880,paidAmt:364700,balanceAmt:726180},
+];}
+function getSampleSales(){return[
+  {flatId:'206',buyerName:'G Venkataramana',saleValue:5000000,cumReceived:3200000,balance:1800000,status:'registered'},
+  {flatId:'306',buyerName:'Hamid Ali',saleValue:4400000,cumReceived:4400000,balance:0,status:'registered'},
+  {flatId:'406',buyerName:'Toufeeq',saleValue:4400000,cumReceived:4400000,balance:0,status:'registered'},
+  {flatId:'302',buyerName:'T Lalitha',saleValue:5300000,cumReceived:5300000,balance:0,status:'registered'},
+  {flatId:'405',buyerName:'S Arjun Reddy',saleValue:5000000,cumReceived:200000,balance:4800000,status:'advance'},
+  {flatId:'102',buyerName:'M Nagamani',saleValue:5350000,cumReceived:100000,balance:5250000,status:'advance'},
+];}
+
+function renderAll(){
+  renderKPIs();
+  renderCatBars();
+  renderMonthly();
+  renderXIRR();
+  renderMilestones();
+  renderVendorBal();
+  renderSalesSummary();
+  renderRecent();
+}
+
+function renderKPIs(){
+  const totalSpend=allEntries.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+  const now=new Date();
+  const m0=new Date(now.getFullYear(),now.getMonth(),1);
+  const monthSpend=allEntries.filter(e=>new Date(e.timestamp)>=m0).reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+  const totalSale=allSales.reduce((mx,s,_,a)=>{const byFlat={};a.forEach(x=>{byFlat[x.flatId]=Math.max(byFlat[x.flatId]||0,parseFloat(x.cumReceived)||0)});return Object.values(byFlat).reduce((s,v)=>s+v,0);},0);
+  const vBal=allVendors.reduce((s,v)=>s+(parseFloat(v.balanceAmt)||0),0);
+  const wk0=new Date(now);wk0.setDate(now.getDate()-7);
+  const weekEntries=allEntries.filter(e=>new Date(e.timestamp)>=wk0).length;
+
+  document.getElementById('kpiStrip').innerHTML=`
+    <div class="kpi"><div class="kpi-lbl">Total spent</div><div class="kpi-val">${G3.fmt(totalSpend)}</div><div class="kpi-sub">all categories</div></div>
+    <div class="kpi"><div class="kpi-lbl">This month</div><div class="kpi-val warn">${G3.fmt(monthSpend)}</div><div class="kpi-sub">${now.toLocaleString('en-IN',{month:'long'})}</div></div>
+    <div class="kpi"><div class="kpi-lbl">Sales received</div><div class="kpi-val good">${G3.fmt(totalSale)}</div><div class="kpi-sub">from buyers</div></div>
+    <div class="kpi"><div class="kpi-lbl">Vendor balance due</div><div class="kpi-val ${vBal>1000000?'bad':'warn'}">${G3.fmt(vBal)}</div><div class="kpi-sub">payable to vendors</div></div>
+    <div class="kpi"><div class="kpi-lbl">Entries this week</div><div class="kpi-val">${weekEntries}</div><div class="kpi-sub">bills logged</div></div>
+  `;
+}
+
+function renderCatBars(){
+  const totals={};
+  allEntries.forEach(e=>{ totals[e.category]=(totals[e.category]||0)+(parseFloat(e.amount)||0); });
+  const max=Math.max(...Object.values(totals),1);
+  const sorted=Object.entries(totals).sort((a,b)=>b[1]-a[1]).slice(0,10);
+  document.getElementById('catBars').innerHTML=sorted.map(([id,amt])=>{
+    const c=G3.cat(id);
+    const budget=G3_CONFIG.budgets[id]||0;
+    const pct=budget>0?Math.min(100,Math.round(amt/budget*100)):0;
+    const barW=Math.round(amt/max*100);
+    const cls=pct>90?'over':pct>70?'warn':'';
+    return`<div style="margin-bottom:14px">
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:4px">
+        <span>${c?.emoji||''} ${c?.name||id}</span>
+        <span style="font-family:monospace;color:var(--ink2)">${G3.fmt(amt)}${budget?` / ${G3.fmt(budget)}`:''}</span>
+      </div>
+      <div class="prog-wrap"><div class="prog-fill ${cls}" style="width:${barW}%"></div></div>
+      ${budget?`<div style="font-size:10px;color:var(--ink3);margin-top:2px">${pct}% of budget</div>`:''}
+    </div>`;
+  }).join('');
+}
+
+function renderMonthly(){
+  const monthly={};
+  allEntries.forEach(e=>{
+    const d=new Date(e.timestamp);
+    const k=d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+    monthly[k]=(monthly[k]||0)+(parseFloat(e.amount)||0);
+  });
+  const labels=Object.keys(monthly).sort();
+  const values=labels.map(k=>monthly[k]);
+  const display=labels.map(k=>{const[y,m]=k.split('-');return['','Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][parseInt(m)]+' '+y.slice(2);});
+  if(chart){chart.destroy();}
+  chart=new Chart(document.getElementById('monthlyChart'),{
+    type:'bar',
+    data:{labels:display,datasets:[{data:values,backgroundColor:'#c84b2f',borderRadius:4}]},
+    options:{
+      responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>'₹'+Math.round(c.raw).toLocaleString('en-IN')}}},
+      scales:{
+        y:{ticks:{callback:v=>'₹'+Math.round(v/100000)+'L',color:'#999',font:{size:10}},grid:{color:'rgba(0,0,0,0.05)'}},
+        x:{ticks:{color:'#999',font:{size:10},autoSkip:false},grid:{display:false}}
+      }
+    }
+  });
+}
+
+function renderXIRR(){
+  const cfg=G3_CONFIG.investor;
+  const totalSpend=allEntries.reduce((s,e)=>s+(parseFloat(e.amount)||0),0);
+  // Build real cashflows
+  const flows=[{date:new Date(cfg.startDate),amount:-cfg.totalInvestment}];
+  // Add sale receipts as inflows if available
+  const byFlat={};
+  allSales.forEach(s=>{if(!byFlat[s.flatId]||parseFloat(s.cumReceived)>parseFloat(byFlat[s.flatId].cumReceived||0))byFlat[s.flatId]=s;});
+  Object.values(byFlat).forEach(s=>{
+    const recv=parseFloat(s.cumReceived)||0;
+    if(recv>0) flows.push({date:new Date(s.paymentDate||Date.now()),amount:recv});
+  });
+  // Projected remaining sale
+  const totalSaleValue=G3_CONFIG.flats.reduce((s,f)=>s+(f.saleValue||0),0);
+  const totalReceived=Object.values(byFlat).reduce((s,f)=>s+(parseFloat(f.cumReceived)||0),0);
+  const remaining=totalSaleValue-totalReceived;
+  if(remaining>0) flows.push({date:new Date(Date.now()+365*86400000),amount:remaining});
+
+  let xirr=0;
+  try{ xirr=G3.xirr(flows)*100; }catch{}
+  const xirrStr=(xirr>0?xirr:0).toFixed(1)+'%';
+  const barPct=Math.min(100,Math.round(Math.max(0,xirr)/15*100));
+
+  document.getElementById('xirrNum').textContent=xirrStr;
+  document.getElementById('xirrNum').style.color=xirr>=cfg.xirr_target?'var(--gd)':xirr>=cfg.xirr_min?'var(--yellow)':'var(--accent)';
+  document.getElementById('xirrFill').style.width=barPct+'%';
+
+  const grossProfit=totalSaleValue-cfg.totalInvestment;
+  const myShare=xirr>=cfg.xirr_target?Math.round(grossProfit*cfg.profitSharePct/100):0;
+  document.getElementById('xirrCalc').innerHTML=xirr>=cfg.xirr_target
+    ?`XIRR ${xirrStr} ≥ ${cfg.xirr_target}% — profit share active<br>Est. owner share (${cfg.profitSharePct}%): <strong>${G3.fmt(myShare)}</strong>`
+    :xirr>=cfg.xirr_min
+    ?`XIRR ${xirrStr} — above ${cfg.xirr_min}% trigger. Target: ${cfg.xirr_target}%.`
+    :`XIRR ${xirrStr} — below ${cfg.xirr_min}% trigger yet. Project early stage.`;
+}
+
+function renderMilestones(){
+  const icons={done:'✓',active:'●',pending:'○'};
+  document.getElementById('milestoneList').innerHTML=G3_CONFIG.milestones.map(m=>`
+    <div class="ms-item">
+      <div class="ms-dot ${m.status}">${icons[m.status]}</div>
+      <div class="ms-body">
+        <div class="ms-name">${m.name}</div>
+        <div class="ms-budget">${G3.fmt(m.budget)}</div>
+      </div>
+      <span class="tag ${m.status==='done'?'tag-green':m.status==='active'?'tag-warn':''}">${m.status}</span>
+    </div>`).join('');
+}
+
+function renderVendorBal(){
+  const outstanding=allVendors.filter(v=>parseFloat(v.balanceAmt)>0).sort((a,b)=>b.balanceAmt-a.balanceAmt);
+  document.getElementById('vendorBalBody').innerHTML=outstanding.map(v=>{
+    const cat=G3.cat(v.category);
+    return`<tr>
+      <td><strong>${v.vendorName}</strong></td>
+      <td><span class="tag">${cat?.emoji||''} ${cat?.name||v.category}</span></td>
+      <td class="right">${G3.fmt(v.invoiceAmt)}</td>
+      <td class="right good">${G3.fmt(v.paidAmt)}</td>
+      <td class="right bad"><strong>${G3.fmt(v.balanceAmt)}</strong></td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="5" style="text-align:center;padding:20px;color:var(--ink3);font-size:13px">All vendors settled</td></tr>';
+}
+
+function renderSalesSummary(){
+  // Latest per flat
+  const byFlat={};
+  allSales.forEach(s=>{if(!byFlat[s.flatId]||parseFloat(s.cumReceived)>=parseFloat(byFlat[s.flatId].cumReceived||0))byFlat[s.flatId]=s;});
+  const rows=Object.values(byFlat).sort((a,b)=>parseFloat(b.balance||0)-parseFloat(a.balance||0));
+  const statusMap={registered:'tag-green',advance:'tag-warn',partial:'tag-blue',full:'tag-green'};
+  document.getElementById('salesBody').innerHTML=rows.map(s=>`<tr>
+    <td><strong>Flat ${s.flatId}</strong></td>
+    <td>${s.buyerName||'—'}</td>
+    <td class="right">${G3.fmt(s.saleValue)}</td>
+    <td class="right good">${G3.fmt(s.cumReceived)}</td>
+    <td class="right ${parseFloat(s.balance||0)>0?'bad':''}">${G3.fmt(s.balance||0)}</td>
+    <td><span class="tag ${statusMap[s.status]||''}">${s.status}</span></td>
+  </tr>`).join('')||'<tr><td colspan="6" style="text-align:center;padding:20px;color:var(--ink3);font-size:13px">No sale data</td></tr>';
+}
+
+function renderRecent(){
+  const recent=[...allEntries].sort((a,b)=>new Date(b.timestamp)-new Date(a.timestamp)).slice(0,8);
+  if(!recent.length){document.getElementById('recentEntries').innerHTML='<div style="text-align:center;padding:24px;color:var(--ink3);font-size:13px">No entries yet</div>';return;}
+  document.getElementById('recentEntries').innerHTML=recent.map(e=>{
+    const d=new Date(e.timestamp);
+    const ds=d.toLocaleDateString('en-IN',{day:'numeric',month:'short'})+' '+d.toLocaleTimeString('en-IN',{hour:'2-digit',minute:'2-digit'});
+    const cat=G3.cat(e.category);
+    const hasPhoto=e.photoUPI||e.photoCash||e.photoNEFT||e.photoCheque||e.photoCard;
+    return`<div style="display:flex;align-items:flex-start;gap:12px;padding:12px 0;border-bottom:1px solid var(--border)">
+      <div style="font-size:22px;flex-shrink:0">${cat?.emoji||'📦'}</div>
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div style="font-size:14px;font-weight:600">${e.vendor||'—'} <span class="tag" style="margin-left:4px">${cat?.name||e.category}</span></div>
+          <div style="font-size:16px;font-weight:700;color:${parseFloat(e.amount)>=100000?'var(--accent)':'var(--ink)'};flex-shrink:0;margin-left:8px">₹${parseInt(e.amount||0).toLocaleString('en-IN')}</div>
+        </div>
+        <div style="font-size:12px;color:var(--ink3);margin-top:2px">${ds} · ${G3.person(e.submittedBy)?.name||e.submittedBy} · ${e.paymode}</div>
+        ${e.notes?`<div style="font-size:12px;color:var(--ink2)">${e.notes}</div>`:''}
+        ${hasPhoto?`<div style="font-size:12px;color:var(--blue);cursor:pointer;margin-top:4px" onclick="viewPhoto('${e.ref}')">📷 View photo</div>`:''}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function viewPhoto(ref){
+  const e=allEntries.find(x=>x.ref===ref)||JSON.parse(localStorage.getItem('g3_local')||'[]').find(x=>x.ref===ref);
+  if(!e)return;
+  const photo=e.photoUPI||e.photoCash||e.photoNEFT||e.photoCheque||e.photoCard||'';
+  const img=document.getElementById('modalImg');
+  const np=document.getElementById('modalNoPhoto');
+  if(photo){img.src=photo;img.style.display='block';np.style.display='none';}
+  else{img.style.display='none';np.style.display='block';}
+  const cat=G3.cat(e.category);
+  document.getElementById('modalMeta').innerHTML=`<strong>₹${parseInt(e.amount||0).toLocaleString('en-IN')}</strong> — ${e.vendor}<br>${cat?.name||e.category} · ${e.paymode}<br>${G3.person(e.submittedBy)?.name||e.submittedBy} · ${new Date(e.timestamp).toLocaleString('en-IN')}<br>Ref: ${ref}${e.gps&&e.gps!=='unavailable'?`<br><a href="https://maps.google.com/?q=${e.gps}" target="_blank" style="color:var(--blue)">📍 View on map</a>`:''}`;
+  document.getElementById('photoModal').classList.add('show');
+}
+</script>
+</body>
+</html>
