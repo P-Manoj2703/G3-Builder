@@ -227,10 +227,16 @@ async function addInvoice() {
   // Push
   const URL=G3_CONFIG.app.sheetURL;
   if(URL!=='YOUR_APPS_SCRIPT_URL_HERE'){
-    const fd=new FormData(); fd.append('action','addVendor');
-    Object.entries(entry).forEach(([k,v])=>fd.append(k,v||''));
-    if(vPhoto){fd.append('fileData',vPhoto.data);fd.append('fileName',vPhoto.name);fd.append('fileMime',vPhoto.mime);}
-    fetch(URL,{method:'POST',body:fd}).catch(()=>{});
+    const params=new URLSearchParams({action:'addVendor'});
+    Object.entries(entry).forEach(([k,v])=>params.append(k,v||''));
+    fetch(URL+'?'+params.toString(),{mode:'no-cors'}).catch(()=>{});
+    if(vPhoto){
+      const ffd=new FormData();
+      ffd.append('action','addDoc');ffd.append('linkedTo','vendor');
+      ffd.append('linkedRef',entry.ref);ffd.append('fileData',vPhoto.data);
+      ffd.append('fileName',vPhoto.name);ffd.append('fileMime',vPhoto.mime);
+      fetch(URL,{method:'POST',body:ffd,mode:'no-cors'}).catch(()=>{});
+    }
   }
   // Reset
   ['vVendor','vInvNo','vInvAmt','vNotes'].forEach(id=>qs(id).value='');
@@ -257,9 +263,9 @@ async function addPayment() {
   };
   const URL=G3_CONFIG.app.sheetURL;
   if(URL!=='YOUR_APPS_SCRIPT_URL_HERE'){
-    const fd=new FormData(); fd.append('action','addVendor');
-    Object.entries(entry).forEach(([k,v])=>fd.append(k,v||''));
-    fetch(URL,{method:'POST',body:fd}).catch(()=>{});
+    const params=new URLSearchParams({action:'addVendor'});
+    Object.entries(entry).forEach(([k,v])=>params.append(k,v||''));
+    fetch(URL+'?'+params.toString(),{mode:'no-cors'}).catch(()=>{});
   }
   ['pVendor','pAmt','pRef'].forEach(id=>qs(id).value='');
   alert(`Payment of ${G3.fmt(amt)} to ${vendorName} recorded.`);
