@@ -697,28 +697,6 @@ async function pushToSheet(entry) {
   } catch(e) {}
 }
 
-
-// ── RESET ─────────────────────────────────────────────────────}
-
-  for (let i = 0; i < total; i++) {
-    const chunk = b64data.slice(i * CHUNK, (i + 1) * CHUNK);
-    const p = new URLSearchParams({
-      action:    'uploadChunk',
-      uploadId:  uploadId,
-      chunkIdx:  i,
-      totalChunks: total,
-      chunk:     chunk,
-    });
-    // Add meta only on first chunk
-    if (i === 0) {
-      Object.entries(meta).forEach(([k,v]) => p.append(k, v||''));
-    }
-    await fetch(URL + '?' + p.toString(), { mode:'no-cors' });
-    // Small delay to avoid overwhelming the script
-    await new Promise(r => setTimeout(r, 100));
-  }
-}
-
 // ── RESET ─────────────────────────────────────────────────────
 function resetForm() {
   Object.assign(S, {who:'',cat:'',catObj:null,pay:'',payClass:'',photos:{},files:[],workers:0,editRef:null,screen:0});
