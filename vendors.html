@@ -1,0 +1,271 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>G3 — Vendor Ledger</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="nav">
+  <a class="nav-brand" href="index.html">G3 <span>Builders</span></a>
+  <div class="nav-links">
+    <a class="nav-link" href="entry.html">+ Entry</a>
+    <a class="nav-link active" href="vendors.html">Vendors</a>
+    <a class="nav-link" href="sales.html">Sales</a>
+    <a class="nav-link" href="dashboard.html">Dashboard</a>
+  </div>
+</nav>
+
+<div style="padding:16px;max-width:700px;margin:0 auto">
+
+  <!-- KPIs -->
+  <div class="kpi-grid" id="vendorKPIs"></div>
+
+  <!-- Add Invoice -->
+  <div class="panel">
+    <div class="panel-hdr"><span class="panel-title">Log goods received / invoice</span></div>
+    <div class="panel-body">
+      <div class="grp">
+        <div class="row"><span class="rl">Vendor</span><input type="text" id="vVendor" list="vList" placeholder="Start typing…"><datalist id="vList"></datalist></div>
+        <div class="row"><span class="rl">Invoice No.</span><input type="text" id="vInvNo" placeholder="Optional"></div>
+        <div class="row"><span class="rl">Date</span><input type="date" id="vInvDate" style="text-align:right"></div>
+        <div class="row"><span class="rl">Category</span><select id="vCat"><option value="">Select…</option></select></div>
+        <div class="row amt-row"><span class="amt-lbl">Invoice amount ₹</span><input class="amt-inp" type="number" id="vInvAmt" inputmode="numeric" placeholder="0"></div>
+        <div class="row" style="align-items:flex-start;padding-top:12px"><span class="rl" style="padding-top:2px">Notes</span><textarea id="vNotes" rows="2" placeholder="e.g. 8.22MT steel, footings…"></textarea></div>
+      </div>
+      <!-- Invoice photo -->
+      <div style="margin-top:12px">
+        <div class="pzone" id="vPhotoZone" onclick="document.getElementById('vPhoto').click()">
+          <input type="file" id="vPhoto" accept="image/*,.pdf" style="display:none" onchange="handleVPhoto(this)">
+          <img class="pzone-img" id="vPhotoImg">
+          <div id="vPhotoPrompt"><div class="pz-ic">📄</div><div class="pz-tt">Attach invoice / delivery note</div><div class="pz-ht">Photo or PDF</div></div>
+        </div>
+      </div>
+      <div class="btn-row"><button class="btn btn-p" onclick="addInvoice()">Record invoice</button></div>
+    </div>
+  </div>
+
+  <!-- Add Payment -->
+  <div class="panel">
+    <div class="panel-hdr"><span class="panel-title">Record payment to vendor</span></div>
+    <div class="panel-body">
+      <div class="grp">
+        <div class="row"><span class="rl">Vendor</span><input type="text" id="pVendor" list="pList" placeholder="Start typing…"><datalist id="pList"></datalist></div>
+        <div class="row"><span class="rl">Date</span><input type="date" id="pDate" style="text-align:right"></div>
+        <div class="row amt-row"><span class="amt-lbl">Amount paid ₹</span><input class="amt-inp" type="number" id="pAmt" inputmode="numeric" placeholder="0"></div>
+        <div class="row"><span class="rl">Mode</span><select id="pMode"><option value="">Select…</option></select></div>
+        <div class="row"><span class="rl">UTR / Ref</span><input type="text" id="pRef" placeholder="Transaction reference"></div>
+      </div>
+      <div class="btn-row"><button class="btn btn-p" onclick="addPayment()">Record payment</button></div>
+    </div>
+  </div>
+
+  <!-- Ledger Table -->
+  <div class="panel">
+    <div class="panel-hdr">
+      <span class="panel-title">Vendor balances</span>
+      <select id="vendorFilter" style="font-size:12px;border:1px solid var(--border);border-radius:6px;padding:4px 8px;background:var(--bg);color:var(--ink2)" onchange="renderLedger()">
+        <option value="">All vendors</option>
+      </select>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl" id="ledgerTable">
+        <thead><tr>
+          <th>Date</th><th>Vendor</th><th>Category</th><th>Invoice No.</th>
+          <th style="text-align:right">Invoice ₹</th><th style="text-align:right">Paid ₹</th>
+          <th style="text-align:right">Balance ₹</th><th>Notes</th><th>Doc</th>
+        </tr></thead>
+        <tbody id="ledgerBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- Photo viewer -->
+<div class="modal-bg" id="photoModal" onclick="if(event.target===this)this.classList.remove('show')">
+  <div class="modal-inner">
+    <div class="modal-ph"><img id="modalImg" src="" style="max-width:100%;max-height:70vh"></div>
+    <div class="modal-info"><button class="modal-close-btn" onclick="qs('photoModal').classList.remove('show')">Close</button></div>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script>
+function qs(id){return document.getElementById(id);}
+
+let vendorData = []; // { ref, vendorName, category, invoiceNo, invoiceDate, invoiceAmt, paidAmt, balanceAmt, notes, invoiceUrl }
+
+// Init
+document.addEventListener('DOMContentLoaded', ()=>{
+  const today = new Date().toISOString().split('T')[0];
+  qs('vInvDate').value = today;
+  qs('pDate').value    = today;
+  buildCatSelect();
+  buildModeSelect();
+  buildVendorDatalist();
+  loadData();
+});
+
+function buildCatSelect() {
+  G3_CONFIG.categories.forEach(c=>{
+    const o=document.createElement('option'); o.value=c.id; o.textContent=`${c.emoji} ${c.name}`; qs('vCat').appendChild(o);
+  });
+}
+function buildModeSelect() {
+  G3_CONFIG.payModes.forEach(p=>{
+    const o=document.createElement('option'); o.value=p.id; o.textContent=p.icon+' '+p.name; qs('pMode').appendChild(o);
+  });
+}
+function buildVendorDatalist() {
+  const html = G3_CONFIG.vendors.map(v=>`<option value="${v.name}">`).join('');
+  qs('vList').innerHTML = html;
+  qs('pList').innerHTML = html;
+}
+
+async function loadData() {
+  const URL = G3_CONFIG.app.sheetURL;
+  if (URL==='YOUR_APPS_SCRIPT_URL_HERE') { vendorData=getSampleData(); renderAll(); return; }
+  try {
+    const r = await fetch(URL+'?action=getVendors');
+    const d = await r.json();
+    vendorData = d.ok ? d.data : getSampleData();
+  } catch { vendorData = getSampleData(); }
+  renderAll();
+}
+
+function getSampleData() {
+  return [
+    { ref:'V001', vendorName:'Simhadri Steel',     category:'steel',   invoiceNo:'INV-001', invoiceDate:'2025-06-17', invoiceAmt:5628931, paidAmt:5570000, balanceAmt:58931,  notes:'61.2MT total' },
+    { ref:'V002', vendorName:'Aparna Enterprises', category:'rmc',     invoiceNo:'INV-002', invoiceDate:'2025-06-23', invoiceAmt:3970200, paidAmt:3430000, balanceAmt:540200, notes:'396 M³ total' },
+    { ref:'V003', vendorName:'Jagadish Materials',  category:'cement',  invoiceNo:'INV-003', invoiceDate:'2025-06-12', invoiceAmt:1090880, paidAmt:364700,  balanceAmt:726180, notes:'3512 bags' },
+    { ref:'V004', vendorName:'Balayya Materials',   category:'materials',invoiceNo:'',      invoiceDate:'2025-06-11', invoiceAmt:215615,  paidAmt:191615,  balanceAmt:24000,  notes:'Sand, metal, brick' },
+  ];
+}
+
+function renderAll() {
+  renderKPIs();
+  renderLedger();
+  buildFilterDropdown();
+}
+
+function renderKPIs() {
+  const totalInvoiced = vendorData.reduce((s,v)=>s+(parseFloat(v.invoiceAmt)||0),0);
+  const totalPaid     = vendorData.reduce((s,v)=>s+(parseFloat(v.paidAmt)||0),0);
+  const totalBalance  = vendorData.reduce((s,v)=>s+(parseFloat(v.balanceAmt)||0),0);
+  const overdueCount  = vendorData.filter(v=>parseFloat(v.balanceAmt)>0).length;
+  qs('vendorKPIs').innerHTML = `
+    <div class="kpi"><div class="kpi-lbl">Total invoiced</div><div class="kpi-val">${G3.fmt(totalInvoiced)}</div></div>
+    <div class="kpi"><div class="kpi-lbl">Total paid</div><div class="kpi-val good">${G3.fmt(totalPaid)}</div></div>
+    <div class="kpi"><div class="kpi-lbl">Outstanding</div><div class="kpi-val ${totalBalance>500000?'bad':'warn'}">${G3.fmt(totalBalance)}</div></div>
+    <div class="kpi"><div class="kpi-lbl">Vendors with balance</div><div class="kpi-val">${overdueCount}</div></div>
+  `;
+}
+
+function buildFilterDropdown() {
+  const vendors = [...new Set(vendorData.map(v=>v.vendorName))];
+  const sel = qs('vendorFilter');
+  sel.innerHTML = '<option value="">All vendors</option>';
+  vendors.forEach(v=>{ const o=document.createElement('option');o.value=v;o.textContent=v;sel.appendChild(o); });
+}
+
+function renderLedger() {
+  const filter = qs('vendorFilter').value;
+  let data = filter ? vendorData.filter(v=>v.vendorName===filter) : vendorData;
+  data = data.sort((a,b)=>new Date(b.invoiceDate)-new Date(a.invoiceDate));
+  qs('ledgerBody').innerHTML = data.map(v=>{
+    const bal = parseFloat(v.balanceAmt)||0;
+    const balClass = bal > 100000 ? 'bad' : bal > 0 ? 'warn' : 'good';
+    const catObj = G3.cat(v.category);
+    return `<tr>
+      <td class="mono">${v.invoiceDate||'—'}</td>
+      <td><strong>${v.vendorName}</strong></td>
+      <td><span class="tag">${catObj?.emoji||''} ${catObj?.name||v.category}</span></td>
+      <td class="mono">${v.invoiceNo||'—'}</td>
+      <td class="right">${G3.fmt(v.invoiceAmt)}</td>
+      <td class="right good">${G3.fmt(v.paidAmt)}</td>
+      <td class="right ${balClass}">${G3.fmt(bal)}</td>
+      <td style="font-size:12px;color:var(--ink2)">${v.notes||'—'}</td>
+      <td>${v.invoiceUrl?`<span style="color:var(--blue);cursor:pointer;font-size:12px" onclick="viewDoc('${v.invoiceUrl}')">📄 View</span>`:'—'}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--ink3);font-size:13px">No vendor records yet</td></tr>';
+}
+
+let vPhoto = null;
+async function handleVPhoto(input) {
+  const file = input.files[0]; if(!file)return;
+  const reader = new FileReader();
+  reader.onload = async e => {
+    vPhoto = { data: await G3.compress(e.target.result), name: file.name, mime: file.type };
+    qs('vPhotoImg').src = vPhoto.data; qs('vPhotoImg').classList.add('show');
+    qs('vPhotoPrompt').style.display='none'; qs('vPhotoZone').classList.add('has');
+  };
+  reader.readAsDataURL(file);
+}
+
+async function addInvoice() {
+  const vendorName = qs('vVendor').value.trim();
+  const invAmt     = parseFloat(qs('vInvAmt').value)||0;
+  if (!vendorName) { alert('Enter vendor name.'); return; }
+  if (invAmt <= 0) { alert('Enter invoice amount.'); return; }
+  const entry = {
+    ref:         G3.genRef('VND'),
+    timestamp:   new Date().toISOString(),
+    vendorId:    G3_CONFIG.vendors.find(v=>v.name===vendorName)?.id || '',
+    vendorName,
+    category:    qs('vCat').value,
+    invoiceNo:   qs('vInvNo').value,
+    invoiceDate: qs('vInvDate').value,
+    invoiceAmt:  invAmt,
+    paidAmt:     0,
+    balanceAmt:  invAmt,
+    notes:       qs('vNotes').value,
+  };
+  vendorData.unshift(entry);
+  renderAll();
+  // Push
+  const URL=G3_CONFIG.app.sheetURL;
+  if(URL!=='YOUR_APPS_SCRIPT_URL_HERE'){
+    const fd=new FormData(); fd.append('action','addVendor');
+    Object.entries(entry).forEach(([k,v])=>fd.append(k,v||''));
+    if(vPhoto){fd.append('fileData',vPhoto.data);fd.append('fileName',vPhoto.name);fd.append('fileMime',vPhoto.mime);}
+    fetch(URL,{method:'POST',body:fd}).catch(()=>{});
+  }
+  // Reset
+  ['vVendor','vInvNo','vInvAmt','vNotes'].forEach(id=>qs(id).value='');
+  vPhoto=null; qs('vPhotoImg').classList.remove('show'); qs('vPhotoPrompt').style.display='block'; qs('vPhotoZone').classList.remove('has');
+  alert('Invoice recorded. Balance: '+G3.fmt(invAmt));
+}
+
+async function addPayment() {
+  const vendorName = qs('pVendor').value.trim();
+  const amt        = parseFloat(qs('pAmt').value)||0;
+  if(!vendorName){alert('Enter vendor name.');return;}
+  if(amt<=0){alert('Enter payment amount.');return;}
+  // Find matching vendor record and reduce balance
+  const rec = vendorData.find(v=>v.vendorName===vendorName && parseFloat(v.balanceAmt)>0);
+  if(rec){
+    rec.paidAmt    = (parseFloat(rec.paidAmt)||0) + amt;
+    rec.balanceAmt = Math.max(0,(parseFloat(rec.balanceAmt)||0) - amt);
+  }
+  renderAll();
+  // Log as entry too
+  const entry = {
+    ref:G3.genRef('PAY'), timestamp:new Date().toISOString(),
+    vendorName, paidAmt:amt, paymode:qs('pMode').value, txnRef:qs('pRef').value,
+  };
+  const URL=G3_CONFIG.app.sheetURL;
+  if(URL!=='YOUR_APPS_SCRIPT_URL_HERE'){
+    const fd=new FormData(); fd.append('action','addVendor');
+    Object.entries(entry).forEach(([k,v])=>fd.append(k,v||''));
+    fetch(URL,{method:'POST',body:fd}).catch(()=>{});
+  }
+  ['pVendor','pAmt','pRef'].forEach(id=>qs(id).value='');
+  alert(`Payment of ${G3.fmt(amt)} to ${vendorName} recorded.`);
+}
+
+function viewDoc(url) { window.open(url,'_blank'); }
+</script>
+</body>
+</html>
