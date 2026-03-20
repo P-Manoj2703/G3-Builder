@@ -190,11 +190,13 @@
       <label class="chk"><input type="checkbox" id="cc2"><span>The amount and payee are correct</span></label>
       <label class="chk"><input type="checkbox" id="cc3"><span>Work or goods were received in exchange</span></label>
     </div>
-    <div class="lbl" style="margin-top:16px">Bill / receipt photo (if available)</div>
-    <div class="pzone" id="zCash" onclick="document.getElementById('fCash').click()">
-      <input type="file" id="fCash" accept="image/*" capture="environment" style="display:none" onchange="handlePic(this,'Cash')">
-      <img class="pzone-img" id="iCash">
-      <div id="dCash"><div class="pz-ic">🧾</div><div class="pz-tt">Add bill photo</div><div class="pz-ht">Optional — photograph if receipt exists</div></div>
+    <div class="lbl" style="margin-top:16px">Bill / Receipt Photo <span style="font-size:11px;color:var(--ink2);font-weight:400">(if available — up to 5)</span></div>
+    <div class="multi-grid" id="billGrid"></div>
+    <input type="file" id="fCash" accept="image/*" style="display:none" multiple onchange="handleBillPhotos(this)">
+    <div id="billAdd" class="pzone" onclick="document.getElementById('fCash').click()" style="cursor:pointer">
+      <div class="pz-ic">🧾</div>
+      <div class="pz-tt">Add bill photo</div>
+      <div class="pz-ht">Optional — photograph if receipt exists</div>
     </div>
     <div class="photo-warn" id="warnCash"></div>
   </div>
@@ -229,9 +231,11 @@
   <div style="margin-top:16px">
     <div class="lbl">Documents <span style="font-size:11px;color:var(--ink2);font-weight:400">(up to 5 — invoices, bills, agreements)</span></div>
     <div class="multi-grid" id="docGrid"></div>
-    <input type="file" id="docInput" accept="image/*,.pdf,.doc,.docx" style="display:none" onchange="handleDocuments(this)">
-    <div id="docAdd" class="multi-add" onclick="document.getElementById('docInput').click()">
-      <span>📎</span> Add document
+    <input type="file" id="docInput" accept="image/*,.pdf,.doc,.docx" style="display:none" multiple onchange="handleDocuments(this)">
+    <div id="docAdd" class="pzone" onclick="document.getElementById('docInput').click()" style="cursor:pointer">
+      <div class="pz-ic">📎</div>
+      <div class="pz-tt">Attach files</div>
+      <div class="pz-ht">Photos, PDFs, invoices, agreements</div>
     </div>
   </div>
 
@@ -286,7 +290,7 @@
 // ── STATE ─────────────────────────────────────────────────────
 const S = {
   who:'', cat:'', catObj:null, pay:'', payClass:'',
-  photos:{}, screenshots:[], documents:[],
+  photos:{}, screenshots:[], documents:[], billPhotos:[],
   files:[], workers:0, gps:null, editRef:null,
 };
 let epFilter='All', pendingDel=null;
@@ -460,6 +464,48 @@ async function handlePic(input, type) {
   reader.readAsDataURL(file);
 }
 
+// ── MULTI BILL PHOTO UPLOAD (up to 5) ────────────────────────
+async function handleBillPhotos(input) {
+  if (!S.billPhotos) S.billPhotos = [];
+  for (const file of input.files) {
+    if (S.billPhotos.length >= 5) { alert('Maximum 5 bill photos allowed.'); break; }
+    const reader = new FileReader();
+    await new Promise(res => {
+      reader.onload = async e => {
+        const compressed = await G3.compress(e.target.result, 800, 0.75);
+        S.billPhotos.push({ name: file.name, mime: 'image/jpeg', data: compressed });
+        renderBillGrid();
+        res();
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+  input.value = '';
+}
+
+function renderBillGrid() {
+  if (!S.billPhotos) S.billPhotos = [];
+  qs('billGrid').innerHTML = S.billPhotos.map((f, i) =>
+    `<div class="multi-thumb">
+      <img src="${f.data}" class="multi-thumb-img">
+      <div class="multi-thumb-rm" onclick="removeBillPhoto(${i})">✕</div>
+      <div class="multi-thumb-lbl">Bill ${i+1}</div>
+    </div>`
+  ).join('');
+  const addZone = qs('billAdd');
+  if (addZone) {
+    addZone.style.display = S.billPhotos.length >= 5 ? 'none' : '';
+    if (S.billPhotos.length > 0) addZone.classList.add('has');
+    else addZone.classList.remove('has');
+  }
+}
+
+function removeBillPhoto(i) {
+  if (!S.billPhotos) return;
+  S.billPhotos.splice(i, 1);
+  renderBillGrid();
+}
+
 // ── MULTI SCREENSHOT UPLOAD (up to 5) ────────────────────────
 async function handleScreenshots(input) {
   for (const file of input.files) {
@@ -512,7 +558,7 @@ async function handleDocuments(input) {
     });
   }
   input.value = '';
-  if (S.documents.length >= 5) qs('docAdd').style.display = 'none';
+  if (S.documents.length >= 5) { const d = qs('docAdd'); if(d) d.style.display = 'none'; }
 }
 
 function renderDocGrid() {
@@ -526,7 +572,12 @@ function renderDocGrid() {
       <div class="multi-thumb-lbl">${f.name.length > 12 ? f.name.slice(0,10)+'…' : f.name}</div>
     </div>`;
   }).join('');
-  qs('docAdd').style.display = S.documents.length >= 5 ? 'none' : 'flex';
+  const docZone = qs('docAdd');
+  if (docZone) {
+    docZone.style.display = S.documents.length >= 5 ? 'none' : '';
+    if (S.documents.length > 0) docZone.classList.add('has');
+    else docZone.classList.remove('has');
+  }
 }
 
 function removeDoc(i) {
@@ -654,9 +705,10 @@ async function submitEntry() {
     photoCash:   S.photos['Cash']   || '',
     photoCard:   S.photos['PP']     || '',
     photoCheque: S.photos['Cheque'] || '',
-    fileCount:   S.screenshots.length + S.documents.length,
+    fileCount:   S.screenshots.length + S.documents.length + S.billPhotos.length,
     _screenshots: S.screenshots,
     _documents:   S.documents,
+    _billPhotos:  S.billPhotos,
     _files:      S.files, // local only, stripped before sheet save
   };
 
@@ -714,7 +766,7 @@ async function pushToSheet(entry) {
   try {
     // Step 1 — Send entry data via GET (bypasses 302 redirect from GitHub Pages)
     const data = {...entry};
-    ['photoUPI','photoNEFT','photoCash','photoCard','photoCheque','_screenshots','_documents','_files'].forEach(k => delete data[k]);
+    ['photoUPI','photoNEFT','photoCash','photoCard','photoCheque','_screenshots','_documents','_billPhotos','_files'].forEach(k => delete data[k]);
     data.action = 'addEntry';
     const params = new URLSearchParams();
     Object.entries(data).forEach(([k,v]) => params.append(k, v||''));
@@ -771,6 +823,21 @@ async function pushToSheet(entry) {
       await fetch(URL, { method:'POST', body:ffd, mode:'no-cors' });
     }
 
+    // Step 5 — Upload bill photos → screenshot columns (tagged as bill)
+    for (const bill of (entry._billPhotos || [])) {
+      const base64 = bill.data.split(',')[1] || bill.data;
+      const ffd = new FormData();
+      ffd.append('action',    'addDoc');
+      ffd.append('linkedTo',  'entry');
+      ffd.append('linkedRef', entry.ref);
+      ffd.append('fileType',  'screenshot');
+      ffd.append('fileName',  'bill_' + bill.name);
+      ffd.append('fileMime',  'image/jpeg');
+      ffd.append('fileData',  base64);
+      ffd.append('uploadedBy', entry.submittedBy);
+      await fetch(URL, { method:'POST', body:ffd, mode:'no-cors' });
+    }
+
   } catch(e) {} // silent fail, data is saved locally
 }
 
@@ -795,8 +862,11 @@ function resetForm() {
   });
   if(qs('screenGrid')) qs('screenGrid').innerHTML='';
   if(qs('docGrid')) qs('docGrid').innerHTML='';
+  if(qs('billGrid')) qs('billGrid').innerHTML='';
   if(qs('screenAdd')) qs('screenAdd').style.display='flex';
-  if(qs('docAdd')) qs('docAdd').style.display='flex';
+  if(qs('docAdd')) qs('docAdd').style.display='';
+  if(qs('billAdd')) qs('billAdd').style.display='';
+  S.billPhotos=[];
   toggle('labourUI',false); toggle('normalUI',true);
   qs('okScreen').classList.remove('show');
   qs('editBanner').classList.remove('show');
