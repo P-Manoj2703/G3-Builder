@@ -16,7 +16,7 @@ const G3_CONFIG = {
     siteRadiusKm: 2,
     photoMaxAgeDays: 1,
     ownerPin:     '9999',
-    sheetURL:     'https://script.google.com/macros/s/AKfycbzMP63sqJ4xMPt0GyNm6b3-m__J0ZVFD0__bjXw0h7Fvw4d6V-xRsXLT50R1ceyi53HYg/exec',
+    sheetURL:     'https://script.google.com/macros/s/AKfycbwxLoKSp2WcEHsynx37PjzP2WpIlhFMd7zmxSBDaVyqF6b5OzHRNFHBu5h5eb0bpheu/exec',
   },
 
   people: [
