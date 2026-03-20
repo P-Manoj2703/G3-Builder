@@ -215,16 +215,24 @@
     <div class="photo-warn" id="warnPP"></div>
   </div>
 
-  <!-- Attach files (any entry) -->
+  <!-- Screenshots (up to 5) -->
   <div style="margin-top:20px">
-    <div class="lbl">Attach documents (optional)</div>
-    <div class="file-zone" id="fileZone" onclick="document.getElementById('fileInput').click()">
-      <input type="file" id="fileInput" multiple accept="image/*,.pdf,.doc,.docx" style="display:none" onchange="handleFiles(this)">
-      <div class="pz-ic">📎</div>
-      <div class="pz-tt">Attach files</div>
-      <div class="pz-ht">Photos, PDFs, invoices, agreements</div>
+    <div class="lbl">Screenshots <span style="font-size:11px;color:var(--ink2);font-weight:400">(up to 5 — payment proof, site photos)</span></div>
+    <div class="multi-grid" id="screenGrid"></div>
+    <input type="file" id="screenInput" accept="image/*" style="display:none" onchange="handleScreenshots(this)">
+    <div id="screenAdd" class="multi-add" onclick="document.getElementById('screenInput').click()">
+      <span>📷</span> Add screenshot
     </div>
-    <div class="file-list" id="fileList"></div>
+  </div>
+
+  <!-- Documents (up to 5) -->
+  <div style="margin-top:16px">
+    <div class="lbl">Documents <span style="font-size:11px;color:var(--ink2);font-weight:400">(up to 5 — invoices, bills, agreements)</span></div>
+    <div class="multi-grid" id="docGrid"></div>
+    <input type="file" id="docInput" accept="image/*,.pdf,.doc,.docx" style="display:none" onchange="handleDocuments(this)">
+    <div id="docAdd" class="multi-add" onclick="document.getElementById('docInput').click()">
+      <span>📎</span> Add document
+    </div>
   </div>
 
   <div class="btn-row">
@@ -278,7 +286,8 @@
 // ── STATE ─────────────────────────────────────────────────────
 const S = {
   who:'', cat:'', catObj:null, pay:'', payClass:'',
-  photos:{}, files:[], workers:0, gps:null, editRef:null,
+  photos:{}, screenshots:[], documents:[],
+  files:[], workers:0, gps:null, editRef:null,
 };
 let epFilter='All', pendingDel=null;
 
@@ -451,41 +460,97 @@ async function handlePic(input, type) {
   reader.readAsDataURL(file);
 }
 
-// ── FILE ATTACHMENTS ──────────────────────────────────────────
+// ── MULTI SCREENSHOT UPLOAD (up to 5) ────────────────────────
+async function handleScreenshots(input) {
+  for (const file of input.files) {
+    if (S.screenshots.length >= 5) { alert('Maximum 5 screenshots allowed.'); break; }
+    const reader = new FileReader();
+    await new Promise(res => {
+      reader.onload = async e => {
+        const compressed = await G3.compress(e.target.result, 800, 0.75);
+        S.screenshots.push({ name: file.name, mime: 'image/jpeg', data: compressed });
+        renderScreenGrid();
+        res();
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+  input.value = '';
+  if (S.screenshots.length >= 5) qs('screenAdd').style.display = 'none';
+}
+
+function renderScreenGrid() {
+  qs('screenGrid').innerHTML = S.screenshots.map((f, i) =>
+    `<div class="multi-thumb">
+      <img src="${f.data}" class="multi-thumb-img">
+      <div class="multi-thumb-rm" onclick="removeScreen(${i})">✕</div>
+      <div class="multi-thumb-lbl">Screen ${i+1}</div>
+    </div>`
+  ).join('');
+  qs('screenAdd').style.display = S.screenshots.length >= 5 ? 'none' : 'flex';
+}
+
+function removeScreen(i) {
+  S.screenshots.splice(i, 1);
+  renderScreenGrid();
+}
+
+// ── MULTI DOCUMENT UPLOAD (up to 5) ──────────────────────────
+async function handleDocuments(input) {
+  for (const file of input.files) {
+    if (S.documents.length >= 5) { alert('Maximum 5 documents allowed.'); break; }
+    const reader = new FileReader();
+    await new Promise(res => {
+      reader.onload = async e => {
+        let data = e.target.result;
+        if (file.type.startsWith('image/')) data = await G3.compress(data, 800, 0.75);
+        S.documents.push({ name: file.name, mime: file.type, data });
+        renderDocGrid();
+        res();
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+  input.value = '';
+  if (S.documents.length >= 5) qs('docAdd').style.display = 'none';
+}
+
+function renderDocGrid() {
+  qs('docGrid').innerHTML = S.documents.map((f, i) => {
+    const isImg = f.mime.startsWith('image/');
+    return `<div class="multi-thumb">
+      ${isImg
+        ? `<img src="${f.data}" class="multi-thumb-img">`
+        : `<div class="multi-thumb-icon">📄</div>`}
+      <div class="multi-thumb-rm" onclick="removeDoc(${i})">✕</div>
+      <div class="multi-thumb-lbl">${f.name.length > 12 ? f.name.slice(0,10)+'…' : f.name}</div>
+    </div>`;
+  }).join('');
+  qs('docAdd').style.display = S.documents.length >= 5 ? 'none' : 'flex';
+}
+
+function removeDoc(i) {
+  S.documents.splice(i, 1);
+  renderDocGrid();
+}
+
+// ── LEGACY FILE ATTACHMENTS (kept for compat) ─────────────────
 async function handleFiles(input) {
   for (const file of input.files) {
     const reader = new FileReader();
     await new Promise(res => {
       reader.onload = async e => {
         let data = e.target.result;
-        // Compress images
         if (file.type.startsWith('image/')) data = await G3.compress(data);
         S.files.push({ name: file.name, mime: file.type, data });
-        renderFileList();
         res();
       };
       reader.readAsDataURL(file);
     });
   }
-  // Mark zone
-  if (S.files.length) qs('fileZone').classList.add('has');
 }
 
-function renderFileList() {
-  qs('fileList').innerHTML = S.files.map((f, i) =>
-    `<div class="file-item">
-      <span class="file-item-icon">${f.mime.startsWith('image/') ? '🖼️' : '📄'}</span>
-      <span class="file-item-name">${f.name}</span>
-      <span class="file-item-rm" onclick="removeFile(${i})">✕</span>
-    </div>`
-  ).join('');
-}
-
-function removeFile(i) {
-  S.files.splice(i, 1);
-  renderFileList();
-  if (!S.files.length) qs('fileZone').classList.remove('has');
-}
+function renderFileList() {}
 
 // ── NAVIGATION ────────────────────────────────────────────────
 function goTo(n) {
@@ -589,7 +654,9 @@ async function submitEntry() {
     photoCash:   S.photos['Cash']   || '',
     photoCard:   S.photos['PP']     || '',
     photoCheque: S.photos['Cheque'] || '',
-    fileCount:   S.files.length,
+    fileCount:   S.screenshots.length + S.documents.length,
+    _screenshots: S.screenshots,
+    _documents:   S.documents,
     _files:      S.files, // local only, stripped before sheet save
   };
 
@@ -647,13 +714,13 @@ async function pushToSheet(entry) {
   try {
     // Step 1 — Send entry data via GET (bypasses 302 redirect from GitHub Pages)
     const data = {...entry};
-    ['photoUPI','photoNEFT','photoCash','photoCard','photoCheque','_files'].forEach(k => delete data[k]);
+    ['photoUPI','photoNEFT','photoCash','photoCard','photoCheque','_screenshots','_documents','_files'].forEach(k => delete data[k]);
     data.action = 'addEntry';
     const params = new URLSearchParams();
     Object.entries(data).forEach(([k,v]) => params.append(k, v||''));
     await fetch(URL + '?' + params.toString(), { mode: 'no-cors' });
 
-    // Step 2 — Upload photo screenshots via POST no-cors
+    // Step 2 — Upload payment screenshots (UPI/Cash/NEFT/Cheque/PP) → screen columns
     const photoMap = {
       UPI: entry.photoUPI, NEFT: entry.photoNEFT,
       Cash: entry.photoCash, Cheque: entry.photoCheque, PP: entry.photoCard
@@ -674,26 +741,42 @@ async function pushToSheet(entry) {
       await fetch(URL, { method:'POST', body:ffd, mode:'no-cors' });
     }
 
-    // Step 3 — Upload attached files via POST no-cors
-    for (const file of (entry._files || [])) {
-      const base64 = file.data.split(',')[1] || file.data;
+    // Step 3 — Upload multi screenshots → screen columns
+    for (const screen of (entry._screenshots || [])) {
+      const base64 = screen.data.split(',')[1] || screen.data;
+      const ffd = new FormData();
+      ffd.append('action',    'addDoc');
+      ffd.append('linkedTo',  'entry');
+      ffd.append('linkedRef', entry.ref);
+      ffd.append('fileType',  'screenshot');
+      ffd.append('fileName',  screen.name);
+      ffd.append('fileMime',  'image/jpeg');
+      ffd.append('fileData',  base64);
+      ffd.append('uploadedBy', entry.submittedBy);
+      await fetch(URL, { method:'POST', body:ffd, mode:'no-cors' });
+    }
+
+    // Step 4 — Upload documents → doc columns
+    for (const doc of (entry._documents || [])) {
+      const base64 = doc.data.split(',')[1] || doc.data;
       const ffd = new FormData();
       ffd.append('action',    'addDoc');
       ffd.append('linkedTo',  'entry');
       ffd.append('linkedRef', entry.ref);
       ffd.append('fileType',  'document');
-      ffd.append('fileName',  file.name);
-      ffd.append('fileMime',  file.mime);
+      ffd.append('fileName',  doc.name);
+      ffd.append('fileMime',  doc.mime);
       ffd.append('fileData',  base64);
       ffd.append('uploadedBy', entry.submittedBy);
       await fetch(URL, { method:'POST', body:ffd, mode:'no-cors' });
     }
+
   } catch(e) {} // silent fail, data is saved locally
 }
 
 // ── RESET ─────────────────────────────────────────────────────
 function resetForm() {
-  Object.assign(S, {who:'',cat:'',catObj:null,pay:'',payClass:'',photos:{},files:[],workers:0,editRef:null});
+  Object.assign(S, {who:'',cat:'',catObj:null,pay:'',payClass:'',photos:{},screenshots:[],documents:[],files:[],workers:0,editRef:null});
   qsa('.who-chip,.cat-chip').forEach(c=>c.classList.remove('sel'));
   qsa('.pay-chip').forEach(c=>c.className='pay-chip');
   ['vendor','notes','amount','txnId','utrId','chequeNo','chequeBank','salPerson'].forEach(id=>{const el=qs(id);if(el)el.value='';});
@@ -707,10 +790,13 @@ function resetForm() {
     if(z){z.classList.remove('has');}
     if(w){w.classList.remove('show');}
   });
-  ['fileZone','rateWarn','flatNoField','landSiteField','personMonthField','inflowNote'].forEach(id=>{
+  ['rateWarn','flatNoField','landSiteField','personMonthField','inflowNote'].forEach(id=>{
     const el=qs(id); if(el){el.classList.remove('has');el.style.display='none';}
   });
-  qs('fileList').innerHTML='';
+  if(qs('screenGrid')) qs('screenGrid').innerHTML='';
+  if(qs('docGrid')) qs('docGrid').innerHTML='';
+  if(qs('screenAdd')) qs('screenAdd').style.display='flex';
+  if(qs('docAdd')) qs('docAdd').style.display='flex';
   toggle('labourUI',false); toggle('normalUI',true);
   qs('okScreen').classList.remove('show');
   qs('editBanner').classList.remove('show');
