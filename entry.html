@@ -716,45 +716,53 @@ function saveLocalEntry(e) {
 function deleteLocalEntry(ref) { localStorage.setItem('g3_local', JSON.stringify(getLocalEntries().filter(e=>e.ref!==ref))); }
 
 // ── PUSH TO SHEET ─────────────────────────────────────────────
+// Apps Script /exec only reliably works with GET requests from browsers.
+// POST causes 302→405 because the user-content redirect doesn't accept POST.
+// Solution: send all data via GET. For large file data, chunk it.
 
-// Apps Script /exec returns 302 → final user-content URL
-// For plain data (no files): GET request works fine
-// For file data: POST directly to the final URL after resolving redirect
 async function gasGet(url, params) {
   const qs = new URLSearchParams(params).toString();
-  await fetch(url + '?' + qs, { mode: 'no-cors' });
+  return fetch(url + '?' + qs, { mode: 'no-cors' });
 }
 
-async function gasPost(url, obj) {
-  // Step 1: resolve the redirect with a GET to get the final exec URL
-  let finalUrl = url;
-  try {
-    const probe = await fetch(url, { method: 'GET', mode: 'cors', redirect: 'follow' });
-    finalUrl = probe.url || url;
-  } catch(e) { finalUrl = url; }
+async function gasPostFile(url, meta, base64Data) {
+  // Split base64 into chunks of 50KB (safe for URL params)
+  const CHUNK = 50000;
+  const uploadId = Date.now().toString(36) + Math.random().toString(36).slice(2);
+  const totalChunks = Math.ceil(base64Data.length / CHUNK);
 
-  // Step 2: POST JSON directly to the final (non-redirecting) URL
-  try {
-    await fetch(finalUrl, {
-      method: 'POST',
-      body: JSON.stringify(obj),
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      mode: 'no-cors'
+  for (let i = 0; i < totalChunks; i++) {
+    const chunk = base64Data.slice(i * CHUNK, (i + 1) * CHUNK);
+    await gasGet(url, {
+      action:      'uploadChunk',
+      uploadId,
+      chunkIdx:    i,
+      totalChunks,
+      chunk,
+      // Send meta only on first chunk
+      ...(i === 0 ? {
+        linkedRef:  meta.linkedRef,
+        linkedTo:   meta.linkedTo,
+        docType:    meta.fileType,
+        fileName:   meta.fileName,
+        fileMime:   meta.fileMime,
+        uploadedBy: meta.uploadedBy
+      } : {})
     });
-  } catch(e) {}
+  }
 }
 
 async function pushToSheet(entry) {
   const URL = G3_CONFIG.app.sheetURL;
   if (URL === 'YOUR_APPS_SCRIPT_URL_HERE') return;
   try {
-    // Step 1 — Send entry data via GET (no file data, safe for GET params)
+    // Step 1 — Send entry data via GET
     const data = {...entry};
     ['photoUPI','photoNEFT','photoCash','photoCard','photoCheque','_documents','_billPhotos','_files'].forEach(k => delete data[k]);
     data.action = 'addEntry';
     await gasGet(URL, data);
 
-    // Step 2 — Upload payment photos (UPI/Cash/NEFT/Cheque/PP) → screen columns
+    // Step 2 — Upload payment photos (UPI/Cash/NEFT/Cheque/PP)
     const photoMap = {
       UPI: entry.photoUPI, NEFT: entry.photoNEFT,
       Cash: entry.photoCash, Cheque: entry.photoCheque, PP: entry.photoCard
@@ -763,31 +771,31 @@ async function pushToSheet(entry) {
       if (!dataUrl) continue;
       const base64 = dataUrl.split(',')[1];
       if (!base64) continue;
-      await gasPost(URL, {
-        action:'addDoc', linkedTo:'entry', linkedRef:entry.ref,
-        fileType:'screenshot', fileName:type+'_'+entry.ref+'.jpg',
-        fileMime:'image/jpeg', fileData:base64, uploadedBy:entry.submittedBy
-      });
+      await gasPostFile(URL, {
+        linkedTo: 'entry', linkedRef: entry.ref,
+        fileType: 'screenshot', fileName: type + '_' + entry.ref + '.jpg',
+        fileMime: 'image/jpeg', uploadedBy: entry.submittedBy
+      }, base64);
     }
 
-    // Step 3 — Upload documents → doc columns
+    // Step 3 — Upload documents
     for (const doc of (entry._documents || [])) {
       const base64 = doc.data.split(',')[1] || doc.data;
-      await gasPost(URL, {
-        action:'addDoc', linkedTo:'entry', linkedRef:entry.ref,
-        fileType:'document', fileName:doc.name,
-        fileMime:doc.mime, fileData:base64, uploadedBy:entry.submittedBy
-      });
+      await gasPostFile(URL, {
+        linkedTo: 'entry', linkedRef: entry.ref,
+        fileType: 'document', fileName: doc.name,
+        fileMime: doc.mime, uploadedBy: entry.submittedBy
+      }, base64);
     }
 
-    // Step 4 — Upload bill photos → screen columns
+    // Step 4 — Upload bill photos
     for (const bill of (entry._billPhotos || [])) {
       const base64 = bill.data.split(',')[1] || bill.data;
-      await gasPost(URL, {
-        action:'addDoc', linkedTo:'entry', linkedRef:entry.ref,
-        fileType:'screenshot', fileName:'bill_'+bill.name,
-        fileMime:'image/jpeg', fileData:base64, uploadedBy:entry.submittedBy
-      });
+      await gasPostFile(URL, {
+        linkedTo: 'entry', linkedRef: entry.ref,
+        fileType: 'screenshot', fileName: 'bill_' + bill.name,
+        fileMime: 'image/jpeg', uploadedBy: entry.submittedBy
+      }, base64);
     }
 
   } catch(e) {} // silent fail, data is saved locally
@@ -989,7 +997,7 @@ function confirmDel() {
   deleteLocalEntry(pendingDel);
   const URL=G3_CONFIG.app.sheetURL;
   if(URL!=='YOUR_APPS_SCRIPT_URL_HERE'){
-    gasPost(URL,{action:'delete',ref:pendingDel,sheet:'entries'}).catch(()=>{});
+    gasGet(URL,{action:'delete',ref:pendingDel,sheet:'entries'}).catch(()=>{});
   }
   qs('delModal').classList.remove('show');
   pendingDel=null;
