@@ -289,6 +289,20 @@ let epFilter='All', pendingDel=null;
 
 // ── INIT ──────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
+  // One-time cleanup: remove old entries that have base64 image data stored
+  try {
+    const old = JSON.parse(localStorage.getItem('g3_local') || '[]');
+    const cleaned = old.map(e => {
+      const c = {...e};
+      delete c.photoUPI; delete c.photoNEFT; delete c.photoCash;
+      delete c.photoCheque; delete c.photoCard;
+      delete c._documents; delete c._billPhotos; delete c._files;
+      return c;
+    });
+    localStorage.setItem('g3_local', JSON.stringify(cleaned));
+  } catch(ex) {
+    localStorage.removeItem('g3_local'); // if still full, wipe it
+  }
   initGPS();
   buildWhoGrid();
   buildPayGrid();
