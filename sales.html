@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>G3 — Sales Register</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="nav">
+  <a class="nav-brand" href="index.html">G3 <span>Builders</span></a>
+  <div class="nav-links">
+    <a class="nav-link" href="entry.html">+ Entry</a>
+    <a class="nav-link" href="vendors.html">Vendors</a>
+    <a class="nav-link active" href="sales.html">Sales</a>
+    <a class="nav-link" href="dashboard.html">Dashboard</a>
+  </div>
+</nav>
+
+<div style="padding:16px;max-width:700px;margin:0 auto">
+
+  <!-- KPIs -->
+  <div class="kpi-grid" id="salesKPIs"></div>
+
+  <!-- Log Payment Received -->
+  <div class="panel">
+    <div class="panel-hdr"><span class="panel-title">Record buyer payment received</span></div>
+    <div class="panel-body">
+      <div class="grp">
+        <div class="row"><span class="rl">Flat</span>
+          <select id="sFlatSel">
+            <option value="">Select flat…</option>
+          </select>
+        </div>
+        <div class="row"><span class="rl">Buyer name</span><input type="text" id="sBuyer" placeholder="Auto-filled from flat"></div>
+        <div class="row"><span class="rl">Date</span><input type="date" id="sDate" style="text-align:right"></div>
+        <div class="row amt-row"><span class="amt-lbl">Amount received ₹</span><input class="amt-inp" type="number" id="sAmt" inputmode="numeric" placeholder="0"></div>
+        <div class="row"><span class="rl">Mode</span><select id="sMode"><option value="">Select…</option></select></div>
+        <div class="row"><span class="rl">TXN Ref</span><input type="text" id="sTxn" placeholder="UTR / cheque / UPI ID"></div>
+        <div class="row"><span class="rl">Status</span>
+          <select id="sStatus" style="text-align:right">
+            <option value="advance">Advance / token</option>
+            <option value="partial">Partial payment</option>
+            <option value="full">Full payment</option>
+            <option value="registered">Registered</option>
+          </select>
+        </div>
+        <div class="row" style="align-items:flex-start;padding-top:12px"><span class="rl" style="padding-top:2px">Notes</span><textarea id="sNotes" rows="2" placeholder="e.g. Registration challan paid, bank loan disbursed…"></textarea></div>
+      </div>
+      <!-- Attach receipt / agreement — up to 5 -->
+      <div style="margin-top:12px">
+        <div class="lbl">Receipt / Agreement <span style="font-size:11px;color:var(--ink2);font-weight:400">(up to 5)</span></div>
+        <div class="multi-grid" id="sDocGrid"></div>
+        <input type="file" id="sDocFile" accept="image/*,.pdf" style="display:none" multiple onchange="handleSDocs(this)">
+        <div id="sDocZone" class="pzone" onclick="document.getElementById('sDocFile').click()" style="cursor:pointer">
+          <div class="pz-ic">📎</div>
+          <div class="pz-tt">Attach receipt / sale agreement</div>
+          <div class="pz-ht">Photos or PDFs — up to 5</div>
+        </div>
+      </div>
+      <div class="btn-row"><button class="btn btn-p" onclick="addSalePayment()">Record payment</button></div>
+    </div>
+  </div>
+
+  <!-- Flat-wise Summary -->
+  <div class="panel">
+    <div class="panel-hdr"><span class="panel-title">Flat-wise status</span></div>
+    <div id="flatCards" style="padding:0 16px 16px"></div>
+  </div>
+
+  <!-- Full Payment History -->
+  <div class="panel">
+    <div class="panel-hdr">
+      <span class="panel-title">Payment history</span>
+      <select id="flatFilter" style="font-size:12px;border:1px solid var(--border);border-radius:6px;padding:4px 8px;background:var(--bg);color:var(--ink2)" onchange="renderHistory()">
+        <option value="">All flats</option>
+      </select>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl">
+        <thead><tr><th>Date</th><th>Flat</th><th>Buyer</th><th>Status</th><th style="text-align:right">Received ₹</th><th>Mode</th><th>Ref</th><th>Doc</th></tr></thead>
+        <tbody id="historyBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script>
+function qs(id){return document.getElementById(id);}
+let salesData = [];
+let sDocs = []; // up to 5 files
+
+const G3_SESSION = G3Auth.requireAuth(); if (!G3_SESSION) throw new Error("Not authenticated");
+G3Auth.injectNavUser();
+document.addEventListener('DOMContentLoaded',()=>{
+  qs('sDate').value = new Date().toISOString().split('T')[0];
+  buildFlatSelect();
+  buildModeSelect();
+  loadSales();
+});
+
+function buildFlatSelect() {
+  const sel = qs('sFlatSel');
+  const filter = qs('flatFilter');
+  G3_CONFIG.flats.filter(f=>f.buyer||f.saleValue).forEach(f=>{
+    const label = `Flat ${f.id} — ${f.type} ${f.facing}${f.buyer?' — '+f.buyer:''}`;
+    [sel,filter].forEach(s=>{ const o=document.createElement('option');o.value=f.id;o.textContent=label;s.appendChild(o); });
+  });
+  sel.addEventListener('change',()=>{
+    const flat = G3.flat(sel.value);
+    if(flat?.buyer) qs('sBuyer').value = flat.buyer;
+  });
+}
+
+function buildModeSelect() {
+  G3_CONFIG.payModes.forEach(p=>{
+    const o=document.createElement('option');o.value=p.id;o.textContent=p.icon+' '+p.name;qs('sMode').appendChild(o);
+  });
+}
+
+async function loadSales() {
+  const URL=G3_CONFIG.app.sheetURL;
+  if(URL==='YOUR_APPS_SCRIPT_URL_HERE'){salesData=getSampleSales();renderAll();return;}
+  try{
+    const r=await fetch(URL+'?action=getSales');
+    const d=await r.json();
+    salesData=d.ok?d.data:getSampleSales();
+  }catch{salesData=getSampleSales();}
+  renderAll();
+}
+
+function getSampleSales() {
+  return [
+    { ref:'S001',flatId:'206',buyerName:'G Venkataramana',saleValue:5000000,paymentAmt:500000, paymentDate:'2025-08-01',paymode:'imps',status:'advance',    cumReceived:3200000,balance:1800000,txnRef:''},
+    { ref:'S002',flatId:'306',buyerName:'Hamid Ali',       saleValue:4400000,paymentAmt:1000000,paymentDate:'2025-08-02',paymode:'cash',status:'registered', cumReceived:4400000,balance:0,      txnRef:''},
+    { ref:'S003',flatId:'406',buyerName:'Toufeeq',         saleValue:4400000,paymentAmt:900000, paymentDate:'2025-08-15',paymode:'cash',status:'registered', cumReceived:4400000,balance:0,      txnRef:''},
+    { ref:'S004',flatId:'302',buyerName:'T Lalitha',       saleValue:5300000,paymentAmt:500000, paymentDate:'2025-10-01',paymode:'imps',status:'registered', cumReceived:5300000,balance:0,      txnRef:''},
+    { ref:'S005',flatId:'405',buyerName:'S Arjun Reddy',   saleValue:5000000,paymentAmt:200000, paymentDate:'2025-09-01',paymode:'cash',status:'advance',    cumReceived:200000, balance:4800000,txnRef:''},
+    { ref:'S006',flatId:'102',buyerName:'M Nagamani',      saleValue:5350000,paymentAmt:100000, paymentDate:'2025-10-01',paymode:'cash',status:'advance',    cumReceived:100000, balance:5250000,txnRef:''},
+  ];
+}
+
+function renderAll(){renderKPIs();renderFlatCards();renderHistory();}
+
+function renderKPIs(){
+  const byFlat={};
+  salesData.forEach(s=>{
+    if(!byFlat[s.flatId]) byFlat[s.flatId]={sale:parseFloat(s.saleValue)||0,received:0};
+    byFlat[s.flatId].received=Math.max(byFlat[s.flatId].received,parseFloat(s.cumReceived)||0);
+  });
+  const totalSale     = Object.values(byFlat).reduce((s,v)=>s+v.sale,0);
+  const totalReceived = Object.values(byFlat).reduce((s,v)=>s+v.received,0);
+  const totalBalance  = totalSale-totalReceived;
+  const regCount      = [...new Set(salesData.filter(s=>s.status==='registered').map(s=>s.flatId))].length;
+  qs('salesKPIs').innerHTML=`
+    <div class="kpi"><div class="kpi-lbl">Total sale value</div><div class="kpi-val">${G3.fmt(totalSale)}</div></div>
+    <div class="kpi"><div class="kpi-lbl">Received to date</div><div class="kpi-val good">${G3.fmt(totalReceived)}</div></div>
+    <div class="kpi"><div class="kpi-lbl">Balance to collect</div><div class="kpi-val ${totalBalance>2000000?'bad':'warn'}">${G3.fmt(totalBalance)}</div></div>
+    <div class="kpi"><div class="kpi-lbl">Flats registered</div><div class="kpi-val">${regCount}</div></div>
+  `;
+}
+
+function renderFlatCards(){
+  const byFlat={};
+  G3_CONFIG.flats.filter(f=>f.saleValue).forEach(f=>{
+    byFlat[f.id]={flatId:f.id,type:f.type,facing:f.facing,buyer:f.buyer,saleValue:f.saleValue,status:f.status||'available',received:0,payments:[]};
+  });
+  salesData.forEach(s=>{
+    if(byFlat[s.flatId]){
+      byFlat[s.flatId].received=Math.max(byFlat[s.flatId].received,parseFloat(s.cumReceived)||0);
+      byFlat[s.flatId].status=s.status||byFlat[s.flatId].status;
+      byFlat[s.flatId].payments.push(s);
+    }
+  });
+  qs('flatCards').innerHTML=Object.values(byFlat).map(f=>{
+    const bal=f.saleValue-f.received;
+    const pct=Math.min(100,Math.round(f.received/f.saleValue*100));
+    const statusTag={registered:'tag-green',advance:'tag-warn',partial:'tag-blue',available:''}[f.status]||'';
+    return `<div style="border:1px solid var(--border);border-radius:12px;padding:14px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:10px">
+        <div>
+          <div style="font-size:16px;font-weight:700">Flat ${f.flatId} <span style="font-size:13px;font-weight:400;color:var(--ink2)">— ${f.type} ${f.facing}</span></div>
+          <div style="font-size:13px;color:var(--ink2)">${f.buyer||'Available'}</div>
+        </div>
+        <span class="tag ${statusTag}">${f.status}</span>
+      </div>
+      <div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px">
+        <span style="color:var(--ink2)">Sale value: <strong>${G3.fmt(f.saleValue)}</strong></span>
+        <span style="color:var(--gd)">Received: <strong>${G3.fmt(f.received)}</strong></span>
+        <span style="color:${bal>1000000?'var(--accent)':'var(--ink2)'}">Balance: <strong>${G3.fmt(bal)}</strong></span>
+      </div>
+      <div class="prog-wrap"><div class="prog-fill ${pct<25?'over':pct<75?'warn':''}" style="width:${pct}%"></div></div>
+      <div style="font-size:11px;color:var(--ink3);margin-top:4px">${pct}% received · ${f.payments.length} payment(s)</div>
+    </div>`;
+  }).join('')||'<div style="text-align:center;padding:24px;color:var(--ink3);font-size:13px">No sale data yet</div>';
+}
+
+function renderHistory(){
+  const filter=qs('flatFilter').value;
+  let data=filter?salesData.filter(s=>s.flatId===filter):salesData;
+  data=data.sort((a,b)=>new Date(b.paymentDate)-new Date(a.paymentDate));
+  const statusMap={registered:'tag-green',advance:'tag-warn',partial:'tag-blue',full:'tag-green'};
+  qs('historyBody').innerHTML=data.map(s=>{
+    const flat=G3.flat(s.flatId);
+    return`<tr>
+      <td class="mono">${s.paymentDate||'—'}</td>
+      <td><strong>Flat ${s.flatId}</strong>${flat?` <span style="font-size:11px;color:var(--ink3)">${flat.type}</span>`:''}</td>
+      <td>${s.buyerName||'—'}</td>
+      <td><span class="tag ${statusMap[s.status]||''}">${s.status}</span></td>
+      <td class="right good"><strong>${G3.fmt(s.paymentAmt)}</strong></td>
+      <td>${G3_CONFIG.payModes.find(p=>p.id===s.paymode)?.name||s.paymode||'—'}</td>
+      <td class="mono" style="font-size:11px">${s.txnRef||'—'}</td>
+      <td>${s.screen1?`<span style="color:var(--blue);cursor:pointer;font-size:12px" onclick="window.open('${s.screen1}','_blank')">📄</span>`:'—'}</td>
+    </tr>`;
+  }).join('')||'<tr><td colspan="8" style="text-align:center;padding:24px;color:var(--ink3);font-size:13px">No payments recorded yet</td></tr>';
+}
+
+// ── MULTI FILE HANDLER ────────────────────────────────────────
+async function handleSDocs(input) {
+  for (const file of input.files) {
+    if (sDocs.length >= 5) { alert('Maximum 5 files allowed.'); break; }
+    const reader = new FileReader();
+    await new Promise(res => {
+      reader.onload = async e => {
+        let data = e.target.result;
+        if (file.type.startsWith('image/')) data = await G3.compress(data, 800, 0.75);
+        sDocs.push({ name: file.name, mime: file.type, data });
+        res();
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+  input.value = '';
+  renderSDocGrid();
+}
+
+function renderSDocGrid() {
+  qs('sDocGrid').innerHTML = sDocs.map((f,i) => {
+    const isImg = f.mime.startsWith('image/');
+    return `<div class="multi-thumb">
+      ${isImg ? `<img src="${f.data}" class="multi-thumb-img">` : `<div class="multi-thumb-icon">📄</div>`}
+      <div class="multi-thumb-rm" onclick="removeSDoc(${i})">✕</div>
+      <div class="multi-thumb-lbl">${f.name.length>12?f.name.slice(0,10)+'…':f.name}</div>
+    </div>`;
+  }).join('');
+  const zone = qs('sDocZone');
+  zone.style.display = sDocs.length >= 5 ? 'none' : '';
+  if (sDocs.length > 0) zone.classList.add('has'); else zone.classList.remove('has');
+}
+
+function removeSDoc(i) { sDocs.splice(i,1); renderSDocGrid(); }
+
+// ── PUSH HELPERS ──────────────────────────────────────────────
+async function gasGet(url, params) {
+  const qs2 = new URLSearchParams(params).toString();
+  return fetch(url + '?' + qs2, { mode: 'no-cors' });
+}
+async function gasFile(url, payload) {
+  return fetch(url, {
+    method: 'POST', body: JSON.stringify(payload),
+    headers: { 'Content-Type': 'text/plain' }, mode: 'no-cors'
+  });
+}
+
+// ── ADD SALE PAYMENT ──────────────────────────────────────────
+async function addSalePayment(){
+  const flatId=qs('sFlatSel').value;
+  const amt=parseFloat(qs('sAmt').value)||0;
+  if(!flatId){alert('Select a flat.');return;}
+  if(amt<=0){alert('Enter payment amount.');return;}
+  const flat=G3.flat(flatId);
+  const prev=salesData.filter(s=>s.flatId===flatId).reduce((mx,s)=>Math.max(mx,parseFloat(s.cumReceived)||0),0);
+  const cumReceived=prev+amt;
+  const saleValue=flat?.saleValue||0;
+  const balance=Math.max(0,saleValue-cumReceived);
+  const entry={
+    ref:G3.genRef('SAL'), timestamp:new Date().toISOString(),
+    flatId, buyerName:qs('sBuyer').value||flat?.buyer||'',
+    saleValue, paymentAmt:amt, paymentDate:qs('sDate').value,
+    paymode:qs('sMode').value, txnRef:qs('sTxn').value,
+    cumReceived, balance, status:qs('sStatus').value, notes:qs('sNotes').value,
+  };
+  salesData.unshift(entry);
+  renderAll();
+
+  const URL=G3_CONFIG.app.sheetURL;
+  if(URL!=='YOUR_APPS_SCRIPT_URL_HERE'){
+    // Entry metadata via GET
+    await gasGet(URL, { action:'addSale', ...entry });
+    // All files in parallel
+    const uploads = sDocs.map(f => {
+      const base64 = f.data.split(',')[1] || f.data;
+      return gasFile(URL, {
+        action:'addDoc', linkedTo:'sale', linkedRef:entry.ref,
+        fileType:'screenshot', fileName:f.name,
+        fileMime:f.mime, fileData:base64, uploadedBy:entry.buyerName
+      });
+    });
+    await Promise.allSettled(uploads);
+  }
+
+  // Reset
+  ['sAmt','sTxn','sNotes'].forEach(id=>qs(id).value='');
+  sDocs=[]; renderSDocGrid();
+  alert(`Payment of ${G3.fmt(amt)} for Flat ${flatId} recorded. Balance: ${G3.fmt(balance)}`);
+}
+</script>
+</body>
+</html>

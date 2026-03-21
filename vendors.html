@@ -1,0 +1,394 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>G3 — Vendor Ledger</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<nav class="nav">
+  <a class="nav-brand" href="index.html">G3 <span>Builders</span></a>
+  <div class="nav-links">
+    <a class="nav-link" href="entry.html">+ Entry</a>
+    <a class="nav-link active" href="vendors.html">Vendors</a>
+    <a class="nav-link" href="sales.html">Sales</a>
+    <a class="nav-link" href="dashboard.html">Dashboard</a>
+  </div>
+</nav>
+
+<div style="padding:16px;max-width:700px;margin:0 auto">
+
+  <!-- KPIs -->
+  <div class="kpi-grid" id="vendorKPIs"></div>
+
+  <!-- Add Invoice -->
+  <div class="panel">
+    <div class="panel-hdr"><span class="panel-title">Log goods received / invoice</span></div>
+    <div class="panel-body">
+      <div class="grp">
+        <div class="row"><span class="rl">Vendor</span><input type="text" id="vVendor" list="vList" placeholder="Start typing…"><datalist id="vList"></datalist></div>
+        <div class="row"><span class="rl">Invoice No.</span><input type="text" id="vInvNo" placeholder="Optional"></div>
+        <div class="row"><span class="rl">Date</span><input type="date" id="vInvDate" style="text-align:right"></div>
+        <div class="row"><span class="rl">Category</span><select id="vCat"><option value="">Select…</option></select></div>
+        <div class="row amt-row"><span class="amt-lbl">Invoice amount ₹</span><input class="amt-inp" type="number" id="vInvAmt" inputmode="numeric" placeholder="0"></div>
+        <div class="row" style="align-items:flex-start;padding-top:12px"><span class="rl" style="padding-top:2px">Notes</span><textarea id="vNotes" rows="2" placeholder="e.g. 8.22MT steel, footings…"></textarea></div>
+      </div>
+      <!-- Invoice photos (up to 5) -->
+      <div style="margin-top:12px">
+        <div class="lbl">Invoice / Delivery Note <span style="font-size:11px;color:var(--ink2);font-weight:400">(up to 5)</span></div>
+        <div class="multi-grid" id="vPhotoGrid"></div>
+        <input type="file" id="vPhoto" accept="image/*,.pdf" style="display:none" multiple onchange="handleVPhotos(this)">
+        <div id="vPhotoZone" class="pzone" onclick="document.getElementById('vPhoto').click()" style="cursor:pointer">
+          <div class="pz-ic">📄</div>
+          <div class="pz-tt" id="vPhotoZoneTxt">Attach invoice / delivery note</div>
+          <div class="pz-ht">Photos or PDFs — up to 5</div>
+        </div>
+      </div>
+      <div class="btn-row"><button class="btn btn-p" onclick="addInvoice()">Record invoice</button></div>
+    </div>
+  </div>
+
+  <!-- Add Payment -->
+  <div class="panel">
+    <div class="panel-hdr"><span class="panel-title">Record payment to vendor</span></div>
+    <div class="panel-body">
+      <div class="grp">
+        <div class="row"><span class="rl">Vendor</span><input type="text" id="pVendor" list="pList" placeholder="Start typing…"><datalist id="pList"></datalist></div>
+        <div class="row"><span class="rl">Date</span><input type="date" id="pDate" style="text-align:right"></div>
+        <div class="row amt-row"><span class="amt-lbl">Amount paid ₹</span><input class="amt-inp" type="number" id="pAmt" inputmode="numeric" placeholder="0"></div>
+        <div class="row"><span class="rl">Mode</span><select id="pMode"><option value="">Select…</option></select></div>
+        <div class="row"><span class="rl">UTR / Ref</span><input type="text" id="pRef" placeholder="Transaction reference"></div>
+      </div>
+      <!-- Payment screenshots (up to 5) -->
+      <div style="margin-top:12px">
+        <div class="lbl">Payment Screenshots <span style="font-size:11px;color:var(--ink2);font-weight:400">(up to 5)</span></div>
+        <div class="multi-grid" id="pPhotoGrid"></div>
+        <input type="file" id="pPhoto" accept="image/*" style="display:none" multiple onchange="handlePPhotos(this)">
+        <div id="pPhotoZone" class="pzone" onclick="document.getElementById('pPhoto').click()" style="cursor:pointer">
+          <div class="pz-ic">📱</div>
+          <div class="pz-tt" id="pPhotoZoneTxt">Attach payment screenshot</div>
+          <div class="pz-ht">UPI / bank transfer proof</div>
+        </div>
+      </div>
+      <div class="btn-row"><button class="btn btn-p" onclick="addPayment()">Record payment</button></div>
+    </div>
+  </div>
+
+  <!-- Ledger Table -->
+  <div class="panel">
+    <div class="panel-hdr">
+      <span class="panel-title">Vendor balances</span>
+      <select id="vendorFilter" style="font-size:12px;border:1px solid var(--border);border-radius:6px;padding:4px 8px;background:var(--bg);color:var(--ink2)" onchange="renderLedger()">
+        <option value="">All vendors</option>
+      </select>
+    </div>
+    <div class="tbl-wrap">
+      <table class="tbl" id="ledgerTable">
+        <thead><tr>
+          <th>Date</th><th>Vendor</th><th>Category</th><th>Invoice No.</th>
+          <th style="text-align:right">Invoice ₹</th><th style="text-align:right">Paid ₹</th>
+          <th style="text-align:right">Balance ₹</th><th>Notes</th><th>Doc</th>
+        </tr></thead>
+        <tbody id="ledgerBody"></tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<!-- Photo viewer -->
+<div class="modal-bg" id="photoModal" onclick="if(event.target===this)this.classList.remove('show')">
+  <div class="modal-inner">
+    <div class="modal-ph"><img id="modalImg" src="" style="max-width:100%;max-height:70vh"></div>
+    <div class="modal-info"><button class="modal-close-btn" onclick="qs('photoModal').classList.remove('show')">Close</button></div>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script src="auth.js"></script>
+<script>
+function qs(id){return document.getElementById(id);}
+
+let vendorData = [];
+let vPhotos = []; // invoice photos
+let pPhotos = []; // payment screenshots
+
+// ── INIT ──────────────────────────────────────────────────────
+const G3_SESSION = G3Auth.requireAuth(); if (!G3_SESSION) throw new Error("Not authenticated");
+G3Auth.injectNavUser();
+document.addEventListener('DOMContentLoaded', ()=>{
+  const today = new Date().toISOString().split('T')[0];
+  qs('vInvDate').value = today;
+  qs('pDate').value    = today;
+  buildCatSelect();
+  buildModeSelect();
+  buildVendorDatalist();
+  loadData();
+});
+
+function buildCatSelect() {
+  G3_CONFIG.categories.forEach(c=>{
+    const o=document.createElement('option'); o.value=c.id; o.textContent=`${c.emoji} ${c.name}`; qs('vCat').appendChild(o);
+  });
+}
+function buildModeSelect() {
+  G3_CONFIG.payModes.forEach(p=>{
+    const o=document.createElement('option'); o.value=p.id; o.textContent=p.icon+' '+p.name; qs('pMode').appendChild(o);
+  });
+}
+function buildVendorDatalist() {
+  const html = G3_CONFIG.vendors.map(v=>`<option value="${v.name}">`).join('');
+  qs('vList').innerHTML = html;
+  qs('pList').innerHTML = html;
+}
+
+// ── LOAD DATA ─────────────────────────────────────────────────
+async function loadData() {
+  const URL = G3_CONFIG.app.sheetURL;
+  if (URL==='YOUR_APPS_SCRIPT_URL_HERE') { vendorData=getSampleData(); renderAll(); return; }
+  try {
+    const r = await fetch(URL+'?action=getVendors');
+    const d = await r.json();
+    vendorData = d.ok ? d.data : getSampleData();
+  } catch { vendorData = getSampleData(); }
+  renderAll();
+}
+
+function getSampleData() {
+  return [
+    { ref:'V001', vendorName:'Simhadri Steel',     category:'steel',    invoiceNo:'INV-001', invoiceDate:'2025-06-17', invoiceAmt:5628931, paidAmt:5570000, balanceAmt:58931,  notes:'61.2MT total' },
+    { ref:'V002', vendorName:'Aparna Enterprises', category:'rmc',      invoiceNo:'INV-002', invoiceDate:'2025-06-23', invoiceAmt:3970200, paidAmt:3430000, balanceAmt:540200, notes:'396 M³ total' },
+    { ref:'V003', vendorName:'Jagadish Materials',  category:'cement',  invoiceNo:'INV-003', invoiceDate:'2025-06-12', invoiceAmt:1090880, paidAmt:364700,  balanceAmt:726180, notes:'3512 bags' },
+    { ref:'V004', vendorName:'Balayya Materials',   category:'materials',invoiceNo:'',       invoiceDate:'2025-06-11', invoiceAmt:215615,  paidAmt:191615,  balanceAmt:24000,  notes:'Sand, metal, brick' },
+  ];
+}
+
+// ── RENDER ────────────────────────────────────────────────────
+function renderAll() { renderKPIs(); renderLedger(); buildFilterDropdown(); }
+
+function renderKPIs() {
+  const totalInvoiced = vendorData.reduce((s,v)=>s+(parseFloat(v.invoiceAmt)||0),0);
+  const totalPaid     = vendorData.reduce((s,v)=>s+(parseFloat(v.paidAmt)||0),0);
+  const totalBalance  = vendorData.reduce((s,v)=>s+(parseFloat(v.balanceAmt)||0),0);
+  const overdueCount  = vendorData.filter(v=>parseFloat(v.balanceAmt)>0).length;
+  qs('vendorKPIs').innerHTML = `
+    <div class="kpi"><div class="kpi-lbl">Total invoiced</div><div class="kpi-val">${G3.fmt(totalInvoiced)}</div></div>
+    <div class="kpi"><div class="kpi-lbl">Total paid</div><div class="kpi-val good">${G3.fmt(totalPaid)}</div></div>
+    <div class="kpi"><div class="kpi-lbl">Outstanding</div><div class="kpi-val ${totalBalance>500000?'bad':'warn'}">${G3.fmt(totalBalance)}</div></div>
+    <div class="kpi"><div class="kpi-lbl">Vendors with balance</div><div class="kpi-val">${overdueCount}</div></div>
+  `;
+}
+
+function buildFilterDropdown() {
+  const vendors = [...new Set(vendorData.map(v=>v.vendorName))];
+  const sel = qs('vendorFilter');
+  sel.innerHTML = '<option value="">All vendors</option>';
+  vendors.forEach(v=>{ const o=document.createElement('option');o.value=v;o.textContent=v;sel.appendChild(o); });
+}
+
+function renderLedger() {
+  const filter = qs('vendorFilter').value;
+  let data = filter ? vendorData.filter(v=>v.vendorName===filter) : vendorData;
+  data = data.sort((a,b)=>new Date(b.invoiceDate)-new Date(a.invoiceDate));
+  qs('ledgerBody').innerHTML = data.map(v=>{
+    const bal = parseFloat(v.balanceAmt)||0;
+    const balClass = bal > 100000 ? 'bad' : bal > 0 ? 'warn' : 'good';
+    const catObj = G3.cat(v.category);
+    return `<tr>
+      <td class="mono">${v.invoiceDate||'—'}</td>
+      <td><strong>${v.vendorName}</strong></td>
+      <td><span class="tag">${catObj?.emoji||''} ${catObj?.name||v.category}</span></td>
+      <td class="mono">${v.invoiceNo||'—'}</td>
+      <td class="right">${G3.fmt(v.invoiceAmt)}</td>
+      <td class="right good">${G3.fmt(v.paidAmt)}</td>
+      <td class="right ${balClass}">${G3.fmt(bal)}</td>
+      <td style="font-size:12px;color:var(--ink2)">${v.notes||'—'}</td>
+      <td>${v.screen1?`<span style="color:var(--blue);cursor:pointer;font-size:12px" onclick="viewDoc('${v.screen1}')">📄 View</span>`:'—'}</td>
+    </tr>`;
+  }).join('') || '<tr><td colspan="9" style="text-align:center;padding:24px;color:var(--ink3);font-size:13px">No vendor records yet</td></tr>';
+}
+
+// ── MULTI FILE HANDLERS ───────────────────────────────────────
+async function handleVPhotos(input) {
+  for (const file of input.files) {
+    if (vPhotos.length >= 5) { alert('Maximum 5 files allowed.'); break; }
+    const reader = new FileReader();
+    await new Promise(res => {
+      reader.onload = async e => {
+        let data = e.target.result;
+        if (file.type.startsWith('image/')) data = await G3.compress(data, 800, 0.75);
+        vPhotos.push({ name: file.name, mime: file.type, data });
+        res();
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+  input.value = '';
+  renderVPhotoGrid();
+}
+
+function renderVPhotoGrid() {
+  qs('vPhotoGrid').innerHTML = vPhotos.map((f,i) => {
+    const isImg = f.mime.startsWith('image/');
+    return `<div class="multi-thumb">
+      ${isImg ? `<img src="${f.data}" class="multi-thumb-img">` : `<div class="multi-thumb-icon">📄</div>`}
+      <div class="multi-thumb-rm" onclick="removeVPhoto(${i})">✕</div>
+      <div class="multi-thumb-lbl">${f.name.length>12?f.name.slice(0,10)+'…':f.name}</div>
+    </div>`;
+  }).join('');
+  const zone = qs('vPhotoZone');
+  const txt  = qs('vPhotoZoneTxt');
+  if (vPhotos.length >= 5) {
+    zone.style.display = 'none';
+  } else {
+    zone.style.display = '';
+    if (txt) txt.textContent = vPhotos.length > 0
+      ? `Add more (${vPhotos.length}/5 added) — tap again`
+      : 'Attach invoice / delivery note';
+  }
+  if (vPhotos.length > 0) zone.classList.add('has'); else zone.classList.remove('has');
+}
+
+function removeVPhoto(i) { vPhotos.splice(i,1); renderVPhotoGrid(); }
+
+async function handlePPhotos(input) {
+  for (const file of input.files) {
+    if (pPhotos.length >= 5) { alert('Maximum 5 screenshots allowed.'); break; }
+    const reader = new FileReader();
+    await new Promise(res => {
+      reader.onload = async e => {
+        const data = await G3.compress(e.target.result, 800, 0.75);
+        pPhotos.push({ name: file.name, mime: 'image/jpeg', data });
+        res();
+      };
+      reader.readAsDataURL(file);
+    });
+  }
+  input.value = '';
+  renderPPhotoGrid();
+}
+
+function renderPPhotoGrid() {
+  qs('pPhotoGrid').innerHTML = pPhotos.map((f,i) =>
+    `<div class="multi-thumb">
+      <img src="${f.data}" class="multi-thumb-img">
+      <div class="multi-thumb-rm" onclick="removePPhoto(${i})">✕</div>
+      <div class="multi-thumb-lbl">Pay ${i+1}</div>
+    </div>`
+  ).join('');
+  const zone = qs('pPhotoZone');
+  const txt  = qs('pPhotoZoneTxt');
+  if (pPhotos.length >= 5) {
+    zone.style.display = 'none';
+  } else {
+    zone.style.display = '';
+    if (txt) txt.textContent = pPhotos.length > 0
+      ? `Add more (${pPhotos.length}/5 added) — tap again`
+      : 'Attach payment screenshot';
+  }
+  if (pPhotos.length > 0) zone.classList.add('has'); else zone.classList.remove('has');
+}
+
+function removePPhoto(i) { pPhotos.splice(i,1); renderPPhotoGrid(); }
+
+// ── PUSH HELPERS ──────────────────────────────────────────────
+async function gasGet(url, params) {
+  const qs2 = new URLSearchParams(params).toString();
+  return fetch(url + '?' + qs2, { mode: 'no-cors' });
+}
+async function gasFile(url, payload) {
+  return fetch(url, {
+    method: 'POST', body: JSON.stringify(payload),
+    headers: { 'Content-Type': 'text/plain' }, mode: 'no-cors'
+  });
+}
+
+// ── ADD INVOICE ───────────────────────────────────────────────
+async function addInvoice() {
+  const vendorName = qs('vVendor').value.trim();
+  const invAmt     = parseFloat(qs('vInvAmt').value)||0;
+  if (!vendorName) { alert('Enter vendor name.'); return; }
+  if (invAmt <= 0) { alert('Enter invoice amount.'); return; }
+
+  const entry = {
+    ref:         G3.genRef('VND'),
+    timestamp:   new Date().toISOString(),
+    vendorId:    G3_CONFIG.vendors.find(v=>v.name===vendorName)?.id || '',
+    vendorName,
+    category:    qs('vCat').value,
+    invoiceNo:   qs('vInvNo').value,
+    invoiceDate: qs('vInvDate').value,
+    invoiceAmt:  invAmt,
+    paidAmt:     0,
+    balanceAmt:  invAmt,
+    notes:       qs('vNotes').value,
+  };
+  vendorData.unshift(entry);
+  renderAll();
+
+  const URL = G3_CONFIG.app.sheetURL;
+  if (URL !== 'YOUR_APPS_SCRIPT_URL_HERE') {
+    // Send entry metadata via GET
+    await gasGet(URL, { action: 'addVendor', ...entry });
+    // Upload all invoice files in parallel
+    const uploads = vPhotos.map((f, i) => {
+      const base64 = f.data.split(',')[1] || f.data;
+      return gasFile(URL, {
+        action: 'addDoc', linkedTo: 'vendor', linkedRef: entry.ref,
+        fileType: 'screenshot', fileName: f.name,
+        fileMime: f.mime, fileData: base64, uploadedBy: 'vendor'
+      });
+    });
+    await Promise.allSettled(uploads);
+  }
+
+  // Reset
+  ['vVendor','vInvNo','vInvAmt','vNotes'].forEach(id=>qs(id).value='');
+  vPhotos = []; renderVPhotoGrid();
+  alert('Invoice recorded. Balance: ' + G3.fmt(invAmt));
+}
+
+// ── ADD PAYMENT ───────────────────────────────────────────────
+async function addPayment() {
+  const vendorName = qs('pVendor').value.trim();
+  const amt        = parseFloat(qs('pAmt').value)||0;
+  if (!vendorName) { alert('Enter vendor name.'); return; }
+  if (amt <= 0)    { alert('Enter payment amount.'); return; }
+
+  const rec = vendorData.find(v=>v.vendorName===vendorName && parseFloat(v.balanceAmt)>0);
+  if (rec) {
+    rec.paidAmt    = (parseFloat(rec.paidAmt)||0) + amt;
+    rec.balanceAmt = Math.max(0,(parseFloat(rec.balanceAmt)||0) - amt);
+  }
+  renderAll();
+
+  const entry = {
+    ref: G3.genRef('PAY'), timestamp: new Date().toISOString(),
+    vendorName, paidAmt: amt,
+    paymode: qs('pMode').value, txnRef: qs('pRef').value,
+  };
+
+  const URL = G3_CONFIG.app.sheetURL;
+  if (URL !== 'YOUR_APPS_SCRIPT_URL_HERE') {
+    await gasGet(URL, { action: 'addVendor', ...entry });
+    const uploads = pPhotos.map((f, i) => {
+      const base64 = f.data.split(',')[1] || f.data;
+      return gasFile(URL, {
+        action: 'addDoc', linkedTo: 'vendor', linkedRef: entry.ref,
+        fileType: 'screenshot', fileName: f.name,
+        fileMime: f.mime, fileData: base64, uploadedBy: 'vendor'
+      });
+    });
+    await Promise.allSettled(uploads);
+  }
+
+  ['pVendor','pAmt','pRef'].forEach(id=>qs(id).value='');
+  pPhotos = []; renderPPhotoGrid();
+  alert(`Payment of ${G3.fmt(amt)} to ${vendorName} recorded.`);
+}
+
+function viewDoc(url) { window.open(url,'_blank'); }
+</script>
+</body>
+</html>
