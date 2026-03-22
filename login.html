@@ -1,0 +1,281 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>G3 Builders — Login</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #f0f2f5;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+  }
+
+  .login-wrap {
+    width: 100%;
+    max-width: 380px;
+  }
+
+  .login-brand {
+    text-align: center;
+    margin-bottom: 28px;
+  }
+
+  .login-brand .logo {
+    font-size: 32px;
+    font-weight: 800;
+    color: #1a1a1a;
+    letter-spacing: -1px;
+  }
+
+  .login-brand .logo span {
+    color: #c0392b;
+  }
+
+  .login-brand .sub {
+    font-size: 13px;
+    color: #888;
+    margin-top: 4px;
+  }
+
+  .login-card {
+    background: white;
+    border-radius: 16px;
+    padding: 28px 24px;
+    box-shadow: 0 4px 24px rgba(0,0,0,.08);
+  }
+
+  .login-card h2 {
+    font-size: 18px;
+    font-weight: 700;
+    color: #1a1a1a;
+    margin-bottom: 6px;
+  }
+
+  .login-card p {
+    font-size: 13px;
+    color: #888;
+    margin-bottom: 24px;
+    line-height: 1.5;
+  }
+
+  .field {
+    margin-bottom: 16px;
+  }
+
+  .field label {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: #555;
+    text-transform: uppercase;
+    letter-spacing: .4px;
+    margin-bottom: 6px;
+  }
+
+  .field input {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1.5px solid #e0e0e0;
+    border-radius: 10px;
+    font-size: 15px;
+    color: #1a1a1a;
+    background: #fafafa;
+    transition: border-color .2s;
+    outline: none;
+  }
+
+  .field input:focus {
+    border-color: #c0392b;
+    background: white;
+  }
+
+  .btn-login {
+    width: 100%;
+    padding: 14px;
+    background: #c0392b;
+    color: white;
+    border: none;
+    border-radius: 10px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    margin-top: 8px;
+    transition: background .2s, opacity .2s;
+  }
+
+  .btn-login:hover { background: #a93226; }
+  .btn-login:disabled { opacity: 0.6; cursor: not-allowed; }
+
+  .error-box {
+    background: #fff0f0;
+    border: 1px solid #ffcccc;
+    border-radius: 8px;
+    padding: 10px 14px;
+    font-size: 13px;
+    color: #c0392b;
+    margin-top: 14px;
+    display: none;
+  }
+
+  .error-box.show { display: block; }
+
+  .contact-note {
+    text-align: center;
+    font-size: 12px;
+    color: #aaa;
+    margin-top: 20px;
+    line-height: 1.6;
+  }
+
+  .spinner {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid rgba(255,255,255,.4);
+    border-top-color: white;
+    border-radius: 50%;
+    animation: spin .7s linear infinite;
+    vertical-align: middle;
+    margin-right: 6px;
+    display: none;
+  }
+
+  .spinner.show { display: inline-block; }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div class="login-wrap">
+
+  <div class="login-brand">
+    <div class="logo">G3 <span>Builders</span></div>
+    <div class="sub">MicroRealty India Pvt Ltd</div>
+  </div>
+
+  <div class="login-card">
+    <h2>Welcome back</h2>
+    <p>Sign in with your credentials to access the project management app.</p>
+
+    <div class="field">
+      <label>Username</label>
+      <input type="text" id="username" placeholder="Enter your username" autocomplete="username" autocapitalize="none">
+    </div>
+
+    <div class="field">
+      <label>Password</label>
+      <input type="password" id="password" placeholder="Enter your password" autocomplete="current-password">
+    </div>
+
+    <button class="btn-login" id="loginBtn" onclick="doLogin()">
+      <span class="spinner" id="spinner"></span>
+      Sign in
+    </button>
+
+    <div class="error-box" id="errorBox"></div>
+  </div>
+
+  <div class="contact-note">
+    Forgot credentials or need access?<br>
+    Contact the platform administrator to reset.
+  </div>
+
+</div>
+
+<script src="config.js"></script>
+<script>
+// ── If already logged in, redirect to home ──────────────────
+(function() {
+  try {
+    const raw = localStorage.getItem('g3_session');
+    if (raw) {
+      const session = JSON.parse(raw);
+      if (session && session.expiry && Date.now() < session.expiry) {
+        const dest = new URLSearchParams(location.search).get('redirect') || 'index.html';
+        location.replace(dest);
+      }
+    }
+  } catch(e) {}
+})();
+
+// Allow Enter key to submit
+document.getElementById('password').addEventListener('keydown', e => {
+  if (e.key === 'Enter') doLogin();
+});
+document.getElementById('username').addEventListener('keydown', e => {
+  if (e.key === 'Enter') document.getElementById('password').focus();
+});
+
+async function doLogin() {
+  const username = document.getElementById('username').value.trim();
+  const password = document.getElementById('password').value;
+  const btn      = document.getElementById('loginBtn');
+  const spinner  = document.getElementById('spinner');
+  const errorBox = document.getElementById('errorBox');
+
+  if (!username) { showError('Please enter your username.'); return; }
+  if (!password) { showError('Please enter your password.'); return; }
+
+  btn.disabled = true;
+  spinner.classList.add('show');
+  errorBox.classList.remove('show');
+
+  const URL = G3_CONFIG.app.sheetURL;
+
+  try {
+    // Direct fetch — no dependency on auth.js
+    const res  = await fetch(URL + '?action=getUsers&username=' + encodeURIComponent(username));
+    const data = await res.json();
+
+    if (!data.ok || !data.data || data.data.length === 0) {
+      showError('Invalid username or password.'); return;
+    }
+
+    const user = data.data[0];
+
+    if (user.active && user.active.toString().toLowerCase() !== 'yes') {
+      showError('Your account is inactive. Contact the administrator.'); return;
+    }
+
+    if (user.password.toString() !== password.toString()) {
+      showError('Invalid username or password.'); return;
+    }
+
+    // Save 7-day session to localStorage
+    const session = {
+      username: user.username,
+      name:     user.name,
+      role:     user.role,
+      personId: user.personId,
+      expiry:   Date.now() + 7 * 24 * 60 * 60 * 1000
+    };
+    localStorage.setItem('g3_session', JSON.stringify(session));
+
+    // Redirect
+    const dest = new URLSearchParams(location.search).get('redirect') || 'index.html';
+    location.replace(dest);
+
+  } catch(e) {
+    showError('Connection error: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    spinner.classList.remove('show');
+  }
+}
+
+function showError(msg) {
+  const box = document.getElementById('errorBox');
+  box.textContent = msg;
+  box.classList.add('show');
+}
+</script>
+</body>
+</html>
